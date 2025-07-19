@@ -163,8 +163,6 @@ export function VrpExplorer() {
     setResponseData(null)
   }, [])
 
-  // Check if send should be disabled
-  const isSendDisabled = !validationResult.valid || isLoading || !authStatus.valid
 
   return (
     <>
@@ -177,7 +175,7 @@ export function VrpExplorer() {
             onValidationChange={handleValidationChange}
             isLoading={isLoading}
             onSend={handleSolve}
-            disabled={isSendDisabled}
+            disabled={false}
             apiKeyStatus={apiKeyStatus}
             onApiKeyChange={handleApiKeyChange}
             currentSample={currentSample}

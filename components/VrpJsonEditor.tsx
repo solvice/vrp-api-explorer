@@ -64,7 +64,7 @@ export function VrpJsonEditor({
       setJsonString(newJsonString)
       setParseError(null)
     }
-  }, [requestData])
+  }, [requestData, jsonString])
 
   // Initial validation
   useEffect(() => {
@@ -91,11 +91,6 @@ export function VrpJsonEditor({
     }
   }
 
-  const handleJsonViewChange = (edit: unknown) => {
-    if (edit && typeof edit === 'object' && edit !== null && 'src' in edit) {
-      handleRequestChange((edit as { src: Record<string, unknown> }).src)
-    }
-  }
 
   const handleApiKeySubmit = () => {
     if (onApiKeyChange) {
@@ -321,7 +316,7 @@ export function VrpJsonEditor({
             {/* Right side: Send Button */}
             <Button
               onClick={onSend}
-              disabled={disabled || isLoading || parseError !== null}
+              disabled={!validationResult.valid || isLoading || parseError !== null}
               size="sm"
               className="min-w-[80px]"
             >
