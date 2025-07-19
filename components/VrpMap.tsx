@@ -245,9 +245,10 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
           }
         })
 
-        // Return to depot if available and we have visits
-        if (startLocation && typeof startLocation === 'object' && startLocation !== null && coordinates.length > 1) {
-          const location = startLocation as { longitude?: number; latitude?: number }
+        // Return to depot if available and we have visits (use end location if available, fallback to start)
+        const endLocation = shifts?.[0]?.end || startLocation
+        if (endLocation && typeof endLocation === 'object' && endLocation !== null && coordinates.length > 1) {
+          const location = endLocation as { longitude?: number; latitude?: number }
           if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
             coordinates.push([location.longitude, location.latitude])
           }

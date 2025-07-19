@@ -188,6 +188,10 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
               latitude: 50.99,
               longitude: 3.81,
             },
+            end: {
+              latitude: 50.99,
+              longitude: 3.81,
+            },
           },
         ],
       },
@@ -229,15 +233,15 @@ function getBigRequestData(): Vrp.VrpSyncSolveParams {
     resources: [
       {
         name: "vehicle_alpha",
-        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }]
+        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }]
       },
       {
         name: "vehicle_beta", 
-        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }]
+        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }]
       },
       {
         name: "vehicle_gamma",
-        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }]
+        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }]
       }
     ],
     options: {
@@ -285,17 +289,17 @@ function getFieldServiceData(): Vrp.VrpSyncSolveParams {
       {
         name: "technician_alice",
         shifts: [
-          { from: "2024-01-15T07:00:00Z", to: "2024-01-15T15:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }, // Morning shift
-          { from: "2024-01-15T15:30:00Z", to: "2024-01-15T23:30:00Z", start: { latitude: 50.99, longitude: 3.81 } }, // Evening shift  
-          { from: "2024-01-16T06:00:00Z", to: "2024-01-16T14:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }  // Next day morning
+          { from: "2024-01-15T07:00:00Z", to: "2024-01-15T15:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }, // Morning shift
+          { from: "2024-01-15T15:30:00Z", to: "2024-01-15T23:30:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }, // Evening shift  
+          { from: "2024-01-16T06:00:00Z", to: "2024-01-16T14:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }  // Next day morning
         ]
       },
       {
         name: "technician_bob",
         shifts: [
-          { from: "2024-01-15T08:00:00Z", to: "2024-01-15T16:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }, // Day shift
-          { from: "2024-01-15T16:30:00Z", to: "2024-01-16T00:30:00Z", start: { latitude: 50.99, longitude: 3.81 } }, // Night shift
-          { from: "2024-01-16T07:00:00Z", to: "2024-01-16T15:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }  // Next day shift
+          { from: "2024-01-15T08:00:00Z", to: "2024-01-15T16:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }, // Day shift
+          { from: "2024-01-15T16:30:00Z", to: "2024-01-16T00:30:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }, // Night shift
+          { from: "2024-01-16T07:00:00Z", to: "2024-01-16T15:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }  // Next day shift
         ]
       }
     ],
@@ -330,6 +334,10 @@ export function getMinimalSampleData(): Vrp.VrpSyncSolveParams {
             from: "2024-01-15T08:00:00Z",
             to: "2024-01-15T18:00:00Z",
             start: {
+              latitude: 50.95,
+              longitude: 3.81,
+            },
+            end: {
               latitude: 50.95,
               longitude: 3.81,
             },
