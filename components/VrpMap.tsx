@@ -137,21 +137,24 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
 
     const bounds = new maplibregl.LngLatBounds()
 
-    // Add resource markers
+    // Add resource markers (from shift start locations in SDK 0.6.0)
     const resources = requestData.resources as Array<Record<string, unknown>> | undefined
     resources?.forEach((resource) => {
-      if (resource.location && typeof resource.location === 'object' && resource.location !== null) {
-        const location = resource.location as { longitude?: number; latitude?: number }
-        if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-          const el = createMarkerElement('resource', typeof resource.name === 'string' ? resource.name : 'Resource')
-          const marker = new maplibregl.Marker({ element: el })
-            .setLngLat([location.longitude, location.latitude])
-            .addTo(map.current!)
-        
-          markers.current.push(marker)
-          bounds.extend([location.longitude, location.latitude])
+      const shifts = resource.shifts as Array<Record<string, unknown>> | undefined
+      shifts?.forEach((shift) => {
+        if (shift.start && typeof shift.start === 'object' && shift.start !== null) {
+          const location = shift.start as { longitude?: number; latitude?: number }
+          if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+            const el = createMarkerElement('resource', typeof resource.name === 'string' ? resource.name : 'Resource')
+            const marker = new maplibregl.Marker({ element: el })
+              .setLngLat([location.longitude, location.latitude])
+              .addTo(map.current!)
+          
+            markers.current.push(marker)
+            bounds.extend([location.longitude, location.latitude])
+          }
         }
-      }
+      })
     })
 
     // Add job markers
@@ -220,9 +223,11 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
         const resources = requestData.resources as Array<Record<string, unknown>> | undefined
         const resource = resources?.find((r) => r.name === trip.resource)
         
-        // Start from depot if available
-        if (resource?.location && typeof resource.location === 'object' && resource.location !== null) {
-          const location = resource.location as { longitude?: number; latitude?: number }
+        // Start from depot if available (from shift start in SDK 0.6.0)
+        const shifts = resource?.shifts as Array<Record<string, unknown>> | undefined
+        const startLocation = shifts?.[0]?.start
+        if (startLocation && typeof startLocation === 'object' && startLocation !== null) {
+          const location = startLocation as { longitude?: number; latitude?: number }
           if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
             coordinates.push([location.longitude, location.latitude])
           }
@@ -241,8 +246,8 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
         })
 
         // Return to depot if available and we have visits
-        if (resource?.location && typeof resource.location === 'object' && resource.location !== null && coordinates.length > 1) {
-          const location = resource.location as { longitude?: number; latitude?: number }
+        if (startLocation && typeof startLocation === 'object' && startLocation !== null && coordinates.length > 1) {
+          const location = startLocation as { longitude?: number; latitude?: number }
           if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
             coordinates.push([location.longitude, location.latitude])
           }
@@ -369,17 +374,19 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
     // Create bounds for fitting map view
     const boundsCoords = [] as Array<[number, number]>
 
-    // Add resource markers
-    (requestData.resources as Array<{ name?: string; location?: { longitude: number; latitude: number } }> | undefined)?.forEach((resource) => {
-      if (resource.location) {
-        const el = createMarkerElement('resource', resource.name || 'Resource')
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([resource.location.longitude, resource.location.latitude])
-          .addTo(map.current!)
-        
-        markers.current.push(marker)
-        boundsCoords.push([resource.location.longitude, resource.location.latitude])
-      }
+    // Add resource markers (from shift start locations in SDK 0.6.0)
+    (requestData.resources as Array<{ name?: string; shifts?: Array<{ start?: { longitude: number; latitude: number } }> }> | undefined)?.forEach((resource) => {
+      resource.shifts?.forEach((shift) => {
+        if (shift.start) {
+          const el = createMarkerElement('resource', resource.name || 'Resource')
+          const marker = new maplibregl.Marker({ element: el })
+            .setLngLat([shift.start.longitude, shift.start.latitude])
+            .addTo(map.current!)
+          
+          markers.current.push(marker)
+          boundsCoords.push([shift.start.longitude, shift.start.latitude])
+        }
+      })
     })
 
     // Add job markers with sequence numbers and vehicle colors
