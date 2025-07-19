@@ -7,6 +7,10 @@ import type { editor } from 'monaco-editor'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { validateVrpRequest, ValidationResult } from '@/lib/vrp-schema'
 import { CheckCircle, XCircle, Loader2, Play, Settings, Minimize2, Maximize2 } from 'lucide-react'
+import { VrpAssistantProvider, useVrpAssistant } from '@/components/VrpAssistant/VrpAssistantContext'
+import { VrpAssistantButton } from '@/components/VrpAssistant/VrpAssistantButton'
+import { VrpAssistantPane } from '@/components/VrpAssistant/VrpAssistantPane'
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,7 +35,7 @@ interface VrpJsonEditorProps {
   onSampleChange?: (sample: SampleType) => void
 }
 
-export function VrpJsonEditor({
+function VrpJsonEditorContent({
   requestData,
   responseData,
   onChange,
@@ -45,6 +49,7 @@ export function VrpJsonEditor({
   currentSample = 'simple',
   onSampleChange
 }: VrpJsonEditorProps) {
+  const { isOpen } = useVrpAssistant()
   const [validationResult, setValidationResult] = useState<ValidationResult>({ valid: true, errors: [] })
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const [tempApiKey, setTempApiKey] = useState('')
@@ -206,9 +211,8 @@ export function VrpJsonEditor({
     )
   }
 
-  return (
-    <TooltipProvider>
-      <div className={cn("flex flex-col h-full", className)}>
+  const editorContent = (
+    <div className={cn("flex flex-col h-full", className)}>
         {/* Controls Header - Single Line */}
         <div className="p-4 border-b bg-background">
           <div className="flex items-center justify-between">
@@ -493,7 +497,40 @@ export function VrpJsonEditor({
           </div>
         </div>
       )}
-      </div>
+    </div>
+  )
+
+  if (!isOpen) {
+    return (
+      <>
+        <VrpAssistantButton />
+        {editorContent}
+      </>
+    )
+  }
+
+  return (
+    <>
+      <VrpAssistantButton />
+      <ResizablePanelGroup direction="vertical" className="h-full">
+        <ResizablePanel defaultSize={60} minSize={30}>
+          {editorContent}
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={40} minSize={20}>
+          <VrpAssistantPane />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </>
+  )
+}
+
+export function VrpJsonEditor(props: VrpJsonEditorProps) {
+  return (
+    <TooltipProvider>
+      <VrpAssistantProvider>
+        <VrpJsonEditorContent {...props} />
+      </VrpAssistantProvider>
     </TooltipProvider>
   )
 }
