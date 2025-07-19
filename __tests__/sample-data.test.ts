@@ -11,40 +11,48 @@ describe('Sample VRP Data', () => {
       expect(sampleData.resources).toBeDefined()
     })
 
-    it('should have exactly 10 locations (2 resources + 8 jobs)', () => {
+    it('should have job locations and resource start locations', () => {
       const sampleData = getSampleVrpData()
-      
-      // Count resources with locations
-      const resourceLocations = sampleData.resources.filter(r => r.location).length
       
       // Count job locations  
       const jobLocations = sampleData.jobs.filter(j => j.location).length
       
-      // Total should be 10 (assuming depot + 8 delivery locations + 1 return depot)
-      expect(jobLocations).toBe(8)
-      expect(sampleData.resources).toHaveLength(2)
+      // In the simple sample, we have 16 delivery jobs + 1 resource with start location
+      expect(jobLocations).toBe(16)
+      expect(sampleData.resources).toHaveLength(1)
+      
+      // Resources should have start locations in their shifts
+      sampleData.resources.forEach(resource => {
+        expect(resource.shifts).toBeDefined()
+        resource.shifts?.forEach(shift => {
+          expect(shift.start).toBeDefined()
+        })
+      })
     })
 
     it('should have realistic geographic coordinates', () => {
       const sampleData = getSampleVrpData()
       
-      // Check that all locations have valid lat/lng
+      // Check that all job locations have valid latitude/longitude
       sampleData.jobs.forEach(job => {
         if (job.location) {
-          expect(job.location.lat).toBeGreaterThan(-90)
-          expect(job.location.lat).toBeLessThan(90)
-          expect(job.location.lng).toBeGreaterThan(-180)
-          expect(job.location.lng).toBeLessThan(180)
+          expect(job.location.latitude).toBeGreaterThan(-90)
+          expect(job.location.latitude).toBeLessThan(90)
+          expect(job.location.longitude).toBeGreaterThan(-180)
+          expect(job.location.longitude).toBeLessThan(180)
         }
       })
 
+      // Check that all resource start locations have valid coordinates
       sampleData.resources.forEach(resource => {
-        if (resource.location) {
-          expect(resource.location.lat).toBeGreaterThan(-90)
-          expect(resource.location.lat).toBeLessThan(90)
-          expect(resource.location.lng).toBeGreaterThan(-180)
-          expect(resource.location.lng).toBeLessThan(180)
-        }
+        resource.shifts?.forEach(shift => {
+          if (shift.start) {
+            expect(shift.start.latitude).toBeGreaterThan(-90)
+            expect(shift.start.latitude).toBeLessThan(90)
+            expect(shift.start.longitude).toBeGreaterThan(-180)
+            expect(shift.start.longitude).toBeLessThan(180)
+          }
+        })
       })
     })
 

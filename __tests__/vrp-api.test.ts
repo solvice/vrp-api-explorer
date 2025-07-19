@@ -27,11 +27,14 @@ describe('VrpApiClient', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockLocalStorage.getItem.mockReturnValue(null)
+    // Ensure we have a demo key available
+    process.env.NEXT_PUBLIC_SOLVICE_API_KEY = 'test-demo-key-123'
   })
 
   describe('constructor', () => {
     it('should use demo API key when no user key provided', () => {
-      process.env.SOLVICE_API_KEY = 'demo-key-123'
+      process.env.NEXT_PUBLIC_SOLVICE_API_KEY = 'demo-key-123'
+      mockLocalStorage.getItem.mockReturnValue(null)
       
       const client = new VrpApiClient()
       expect(client).toBeDefined()
@@ -46,10 +49,14 @@ describe('VrpApiClient', () => {
     })
 
     it('should throw error when no API key available', () => {
-      delete process.env.SOLVICE_API_KEY
+      const originalKey = process.env.NEXT_PUBLIC_SOLVICE_API_KEY
+      delete process.env.NEXT_PUBLIC_SOLVICE_API_KEY
       mockLocalStorage.getItem.mockReturnValue(null)
       
       expect(() => new VrpApiClient()).toThrow('No API key available')
+      
+      // Restore the key
+      process.env.NEXT_PUBLIC_SOLVICE_API_KEY = originalKey
     })
   })
 
@@ -99,11 +106,11 @@ describe('VrpApiClient', () => {
       const mockResponse = {
         trips: [
           {
-            resourceName: 'vehicle_east',
+            resource: 'vehicle_east',
             visits: [
               {
-                jobName: 'delivery_alexanderplatz',
-                arrivalTime: '2024-01-15T09:00:00Z'
+                job: 'delivery_alexanderplatz',
+                arrival: '2024-01-15T09:00:00Z'
               }
             ]
           }
@@ -111,12 +118,14 @@ describe('VrpApiClient', () => {
       }
 
       const { SolviceVrpSolver } = require('solvice-vrp-solver')
+      // Create a fresh mock for this test
+      jest.resetModules()
       const mockSyncSolve = jest.fn().mockResolvedValue(mockResponse)
       SolviceVrpSolver.mockImplementation(() => ({
         vrp: { syncSolve: mockSyncSolve }
       }))
 
-      const client = new VrpApiClient('demo-key')
+      const client = new VrpApiClient('test-demo-key-123')
       const sampleData = getSampleVrpData()
       
       const result = await client.solveVrp(sampleData)
@@ -153,7 +162,7 @@ describe('VrpApiClient', () => {
 
     it('should handle authentication errors', async () => {
       const { SolviceVrpSolver } = require('solvice-vrp-solver')
-      const authError = new Error('Authentication failed')
+      const authError = new Error('unauthorized')
       authError.name = 'AuthenticationError'
       const mockSyncSolve = jest.fn().mockRejectedValue(authError)
       SolviceVrpSolver.mockImplementation(() => ({
@@ -163,10 +172,9 @@ describe('VrpApiClient', () => {
       const client = new VrpApiClient('demo-key')
       const sampleData = getSampleVrpData()
       
-      await expect(client.solveVrp(sampleData)).rejects.toThrow(VrpApiError)
-      
       try {
         await client.solveVrp(sampleData)
+        fail('Expected error to be thrown')
       } catch (error) {
         expect(error).toBeInstanceOf(VrpApiError)
         expect((error as VrpApiError).type).toBe('authentication')
@@ -176,7 +184,7 @@ describe('VrpApiClient', () => {
 
   describe('isUsingDemoKey', () => {
     it('should return true when using demo key', () => {
-      process.env.SOLVICE_API_KEY = 'demo-key'
+      process.env.NEXT_PUBLIC_SOLVICE_API_KEY = 'demo-key'
       mockLocalStorage.getItem.mockReturnValue(null)
       
       const client = new VrpApiClient()
@@ -184,7 +192,7 @@ describe('VrpApiClient', () => {
     })
 
     it('should return false when using user key', () => {
-      process.env.SOLVICE_API_KEY = 'demo-key'
+      process.env.NEXT_PUBLIC_SOLVICE_API_KEY = 'demo-key'
       mockLocalStorage.getItem.mockReturnValue('user-key')
       
       const client = new VrpApiClient()

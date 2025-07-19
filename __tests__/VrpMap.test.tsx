@@ -10,18 +10,23 @@ const mockMap = {
   removeLayer: jest.fn(),
   removeSource: jest.fn(),
   getSource: jest.fn(),
+  getLayer: jest.fn(),
   on: jest.fn((event, callback) => {
     if (event === 'load') {
       // Simulate map load after a short delay
       setTimeout(callback, 0)
     }
   }),
+  once: jest.fn(),
   off: jest.fn(),
   fitBounds: jest.fn(),
   resize: jest.fn(),
   remove: jest.fn(),
   loaded: jest.fn(() => true),
-  getStyle: jest.fn(() => ({ layers: [], sources: {} }))
+  isStyleLoaded: jest.fn(() => true),
+  getStyle: jest.fn(() => ({ layers: [], sources: {} })),
+  setPaintProperty: jest.fn(),
+  getCanvas: jest.fn(() => ({ style: {} }))
 }
 
 jest.mock('maplibre-gl', () => ({
@@ -36,6 +41,11 @@ jest.mock('maplibre-gl', () => ({
   LngLatBounds: jest.fn(() => ({
     extend: jest.fn().mockReturnThis(),
     isEmpty: jest.fn(() => false)
+  })),
+  Popup: jest.fn(() => ({
+    setLngLat: jest.fn().mockReturnThis(),
+    setHTML: jest.fn().mockReturnThis(),
+    addTo: jest.fn().mockReturnThis()
   }))
 }))
 
