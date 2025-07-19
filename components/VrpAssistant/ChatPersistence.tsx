@@ -28,9 +28,9 @@ export class ChatPersistence {
       const messages = JSON.parse(serializedMessages)
       
       // Ensure timestamps are properly converted back to Date objects
-      return messages.map((msg: any) => ({
+      return messages.map((msg: Record<string, unknown>) => ({
         ...msg,
-        timestamp: new Date(msg.timestamp)
+        timestamp: new Date(msg.timestamp as string)
       }))
     } catch (error) {
       console.warn('Failed to load chat messages from localStorage:', error)

@@ -19,6 +19,8 @@ export function validateVrpRequest(request: unknown): ValidationResult {
   // Check required fields
   if (!Array.isArray((request as {jobs?: unknown}).jobs)) {
     errors.push('jobs: must be an array')
+  } else if ((request as {jobs: unknown[]}).jobs.length === 0) {
+    errors.push('At least one job is required')
   } else {
     // Validate jobs
     (request as {jobs: unknown[]}).jobs.forEach((job: unknown, index: number) => {
@@ -51,6 +53,8 @@ export function validateVrpRequest(request: unknown): ValidationResult {
   
   if (!Array.isArray((request as {resources?: unknown}).resources)) {
     errors.push('resources: must be an array')
+  } else if ((request as {resources: unknown[]}).resources.length === 0) {
+    errors.push('At least one resource is required')
   } else {
     // Validate resources
     (request as {resources: unknown[]}).resources.forEach((resource: unknown, index: number) => {
