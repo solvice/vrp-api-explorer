@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { VrpSchemaService } from "../../lib/vrp-schema-service";
 import { Vrp } from "solvice-vrp-solver/resources/vrp/vrp";
 import { ErrorHandlingService } from '@/lib/error-handling-service';
@@ -20,27 +19,13 @@ export interface VrpModificationResponse {
 }
 
 export class OpenAIService {
-  private openai: OpenAI;
-
-  constructor(apiKey?: string) {
-    const key = apiKey || process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-
-    if (!key || key.trim() === "") {
-      throw new Error(
-        "OpenAI API key is required. Set NEXT_PUBLIC_OPENAI_API_KEY or OPENAI_API_KEY environment variable or provide apiKey parameter.",
-      );
-    }
-
-    this.openai = new OpenAI({
-      apiKey: key,
-      // Allow in browser/test environments - this is safe for our use case
-      // since we're handling API keys through environment variables
-      dangerouslyAllowBrowser: true,
-    });
+  constructor() {
+    // No longer need API key on client-side
+    // All API calls go through our server-side API route
   }
 
   async sendMessage(message: string, systemPrompt?: string): Promise<string> {
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
 
     if (systemPrompt) {
       messages.push({
@@ -55,29 +40,36 @@ export class OpenAIService {
     });
 
     try {
-      const completion = await this.openai.chat.completions.create({
-        model: "gpt-4",
-        messages,
-        max_tokens: 1000,
-        temperature: 0.7,
+      const response = await fetch('/api/openai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages,
+          model: "gpt-4",
+          max_tokens: 1000,
+          temperature: 0.7,
+        }),
       });
 
-      const content = completion.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("Invalid response format from OpenAI API");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API error: ${response.status}`);
       }
 
-      return content;
+      const data = await response.json();
+      return data.content;
     } catch (error: unknown) {
-      if (error instanceof OpenAI.APIError) {
-        throw new Error(`OpenAI API error: ${error.status} ${error.message}`);
+      if (error instanceof Error) {
+        throw new Error(`OpenAI API error: ${error.message}`);
       }
       throw error;
     }
   }
 
   async sendStructuredMessage(message: string, systemPrompt?: string): Promise<VrpModificationResponse> {
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
 
     if (systemPrompt) {
       messages.push({
@@ -92,22 +84,34 @@ export class OpenAIService {
     });
 
     try {
-      console.log('🤖 Calling OpenAI with JSON mode...');
+      console.log('🤖 Calling OpenAI API route with JSON mode...');
       console.log('Model: gpt-4o');
       console.log('Messages length:', messages.length);
       
-      const completion = await this.openai.chat.completions.create({
-        model: "gpt-4o", // Use gpt-4o for JSON mode
-        messages,
-        max_tokens: 2000,
-        temperature: 0.3,
-        response_format: { type: "json_object" }
+      const response = await fetch('/api/openai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages,
+          model: "gpt-4o", // Use gpt-4o for JSON mode
+          max_tokens: 2000,
+          temperature: 0.3,
+          response_format: { type: "json_object" }
+        }),
       });
 
-      console.log('✅ OpenAI response received');
-      console.log('Usage:', completion.usage);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API error: ${response.status}`);
+      }
 
-      const content = completion.choices[0]?.message?.content;
+      const data = await response.json();
+      console.log('✅ OpenAI response received');
+      console.log('Usage:', data.usage);
+
+      const content = data.content;
       if (!content) {
         throw new Error("Invalid response format from OpenAI API - no content");
       }
@@ -123,18 +127,6 @@ export class OpenAIService {
       console.error('Error type:', typeof error);
       console.error('Error constructor:', error && typeof error === 'object' && 'constructor' in error ? error.constructor?.name : 'Unknown');
       console.error('Error message:', error instanceof Error ? error.message : 'Unknown');
-      console.error('Error status:', error && typeof error === 'object' && 'status' in error ? error.status : 'Unknown');
-      console.error('Error code:', error && typeof error === 'object' && 'code' in error ? error.code : 'Unknown');
-      
-      if (error instanceof OpenAI.APIError) {
-        console.error('OpenAI API Error details:', {
-          status: error.status,
-          message: error.message,
-          code: error.code,
-          type: error.type
-        });
-        throw new Error(`OpenAI API error: ${error.status} ${error.message}`);
-      }
       
       // Re-throw with more context
       throw new Error(`Structured output failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -146,21 +138,16 @@ export class OpenAIService {
    * Check if the service is properly configured
    */
   isConfigured(): boolean {
-    return Boolean(this.openai);
+    // Always return true as configuration is now handled server-side
+    return true;
   }
 
   /**
    * Get a masked version of the API key for display purposes
    */
   getMaskedApiKey(): string {
-    // Since the API key is validated in constructor, if we have an openai instance, we have a valid key
-    if (!this.openai) return "Not configured";
-    
-    // We can't access the key directly from the OpenAI instance, but we know it's configured
-    const key = process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "";
-    if (!key) return "Configured";
-    
-    return `${key.substring(0, 7)}...${key.substring(key.length - 4)}`;
+    // API key is now handled server-side, so we can't display it
+    return "Configured (Server-side)";
   }
 
   /**

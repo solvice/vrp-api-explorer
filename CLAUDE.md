@@ -130,11 +130,11 @@ __tests__/                   # Jest tests for all components
 
 Required environment variables:
 ```bash
-NEXT_PUBLIC_SOLVICE_API_KEY=your_solvice_api_key_here
-NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+SOLVICE_API_KEY=your_solvice_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-The `NEXT_PUBLIC_` prefix is required for client-side access in Next.js. The OpenAI API key enables the AI assistant functionality.
+These are server-side only environment variables for security. API keys are never exposed to the client-side. The OpenAI API key enables the AI assistant functionality.
 
 ## Map Integration
 

@@ -4,9 +4,9 @@ import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 
 export async function POST(request: NextRequest) {
   try {
-    // Get API key from request headers or environment
+    // Get API key from request headers or server-side environment
     const authHeader = request.headers.get('authorization')
-    const apiKey = authHeader?.replace('Bearer ', '') || process.env.NEXT_PUBLIC_SOLVICE_API_KEY
+    const apiKey = authHeader?.replace('Bearer ', '') || process.env.SOLVICE_API_KEY
 
     if (!apiKey) {
       return NextResponse.json(

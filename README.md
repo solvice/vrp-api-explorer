@@ -47,11 +47,11 @@ The application provides a split-pane interface with:
    
    Create a `.env.local` file in the project root:
    ```bash
-   NEXT_PUBLIC_SOLVICE_API_KEY=your_solvice_api_key_here
-   NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+   SOLVICE_API_KEY=your_solvice_api_key_here
+   OPENAI_API_KEY=your_openai_api_key_here
    ```
    
-   > **Note**: The `NEXT_PUBLIC_` prefix is required for client-side access in Next.js. The OpenAI key enables AI assistant features.
+   > **Note**: These are server-side only environment variables for security. API keys are never exposed to the client-side. The OpenAI key enables AI assistant features.
 
 4. **Run the development server**
    ```bash
@@ -219,7 +219,7 @@ The application uses the [Solvice VRP Solver SDK](https://www.npmjs.com/package/
 ### Common Issues
 
 **API Key Not Working**
-- Ensure Solvice and OpenAI keys are in `.env.local` with `NEXT_PUBLIC_` prefix
+- Ensure Solvice and OpenAI keys are in `.env.local` as server-side environment variables
 - Restart the development server after adding keys
 - Check browser console for authentication errors
 - Verify OpenAI API key has sufficient credits and permissions
