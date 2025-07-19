@@ -147,10 +147,10 @@ export function VrpExplorer() {
   // Handle request data changes
   const handleRequestChange = useCallback((newRequestData: Record<string, unknown>) => {
     console.log('🗺️ VrpExplorer: Request data changed, updating map...', {
-      hasJobs: Array.isArray((newRequestData as any)?.jobs),
-      jobCount: (newRequestData as any)?.jobs?.length,
-      hasResources: Array.isArray((newRequestData as any)?.resources),
-      resourceCount: (newRequestData as any)?.resources?.length
+      hasJobs: Array.isArray((newRequestData as Record<string, unknown>)?.jobs),
+      jobCount: Array.isArray((newRequestData as Record<string, unknown>)?.jobs) ? ((newRequestData as Record<string, unknown>).jobs as unknown[]).length : 0,
+      hasResources: Array.isArray((newRequestData as Record<string, unknown>)?.resources),
+      resourceCount: Array.isArray((newRequestData as Record<string, unknown>)?.resources) ? ((newRequestData as Record<string, unknown>).resources as unknown[]).length : 0
     })
     setRequestData(newRequestData as unknown as Vrp.VrpSyncSolveParams)
     // Clear response when request changes

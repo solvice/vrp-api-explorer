@@ -496,8 +496,8 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
     console.log('🗺️ VrpMap: Map updating due to data change...', {
       hasRequestData: !!requestData,
       hasResponseData: !!responseData,
-      jobCount: Array.isArray((requestData as any)?.jobs) ? (requestData as any).jobs.length : 0,
-      resourceCount: Array.isArray((requestData as any)?.resources) ? (requestData as any).resources.length : 0,
+      jobCount: Array.isArray((requestData as Record<string, unknown>)?.jobs) ? ((requestData as Record<string, unknown>).jobs as unknown[]).length : 0,
+      resourceCount: Array.isArray((requestData as Record<string, unknown>)?.resources) ? ((requestData as Record<string, unknown>).resources as unknown[]).length : 0,
       isLoading
     })
 

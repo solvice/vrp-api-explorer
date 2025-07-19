@@ -68,7 +68,7 @@ export class OpenAIService {
       }
 
       return content;
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof OpenAI.APIError) {
         throw new Error(`OpenAI API error: ${error.status} ${error.message}`);
       }
@@ -118,13 +118,13 @@ export class OpenAIService {
       console.log('✅ Successfully parsed structured response');
       
       return parsed;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Error in sendStructuredMessage:', error);
       console.error('Error type:', typeof error);
-      console.error('Error constructor:', error?.constructor?.name);
-      console.error('Error message:', error?.message);
-      console.error('Error status:', error?.status);
-      console.error('Error code:', error?.code);
+      console.error('Error constructor:', error && typeof error === 'object' && 'constructor' in error ? error.constructor?.name : 'Unknown');
+      console.error('Error message:', error instanceof Error ? error.message : 'Unknown');
+      console.error('Error status:', error && typeof error === 'object' && 'status' in error ? error.status : 'Unknown');
+      console.error('Error code:', error && typeof error === 'object' && 'code' in error ? error.code : 'Unknown');
       
       if (error instanceof OpenAI.APIError) {
         console.error('OpenAI API Error details:', {
@@ -137,7 +137,7 @@ export class OpenAIService {
       }
       
       // Re-throw with more context
-      throw new Error(`Structured output failed: ${error?.message || 'Unknown error'}`);
+      throw new Error(`Structured output failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -193,10 +193,10 @@ export class OpenAIService {
         baseDelay: 1000,
         maxDelay: 10000
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('🚨 Raw OpenAI error in modifyVrpData:', error);
-      console.error('🚨 Error message:', error?.message);
-      console.error('🚨 Error stack:', error?.stack);
+      console.error('🚨 Error message:', error instanceof Error ? error.message : 'Unknown');
+      console.error('🚨 Error stack:', error instanceof Error ? error.stack : 'Unknown');
       const vrpError = ErrorHandlingService.classifyError(error);
       ErrorHandlingService.logError(vrpError, {
         operation: 'modifyVrpData',

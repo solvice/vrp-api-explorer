@@ -120,7 +120,7 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
       if (!aiService) {
         try {
           aiService = new OpenAIService()
-        } catch (_error) {
+        } catch {
           addMessage('assistant', 'OpenAI service is not configured. Please check your API key configuration.')
           return
         }
