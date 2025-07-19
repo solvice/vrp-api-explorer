@@ -9,6 +9,9 @@ export async function POST(request: NextRequest) {
     const apiKey = authHeader?.replace('Bearer ', '') || process.env.SOLVICE_API_KEY
 
     if (!apiKey) {
+      console.error('❌ Solvice API key not found in environment variables or headers')
+      console.error('Available env vars:', Object.keys(process.env).filter(key => key.includes('SOLVICE')))
+      console.error('Has auth header:', !!authHeader)
       return NextResponse.json(
         { error: 'No API key provided' },
         { status: 401 }

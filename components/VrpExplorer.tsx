@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
 import { VrpMap } from './VrpMap'
-import { VrpApiClient, VrpApiError } from '@/lib/vrp-api'
+import { VrpApiError } from '@/lib/vrp-api'
 import { getSampleVrpData, SampleType } from '@/lib/sample-data'
 import { ValidationResult } from '@/lib/vrp-schema'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
@@ -17,86 +17,20 @@ export function VrpExplorer() {
   const [responseData, setResponseData] = useState<Vrp.OnRouteResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [validationResult, setValidationResult] = useState<ValidationResult>({ valid: true, errors: [] })
-  const [apiClient] = useState(() => {
-    try {
-      return new VrpApiClient()
-    } catch {
-      // If no API key available, still create client for demo
-      console.warn('No API key available')
-      return null
-    }
+  // API status - always configured since keys are server-side
+  const [apiKeyStatus] = useState<{ type: 'demo' | 'user', masked: string }>({ 
+    type: 'user', 
+    masked: 'Configured (Server-side)' 
   })
 
-  // Get API key status for header
-  const getApiKeyStatus = useCallback(() => {
-    if (!apiClient) {
-      return { type: 'demo' as const, masked: 'No API Key' }
-    }
-    try {
-      return apiClient.getApiKeyStatus()
-    } catch {
-      return { type: 'demo' as const, masked: 'No API Key' }
-    }
-  }, [apiClient])
-
-  const [apiKeyStatus, setApiKeyStatus] = useState<{ type: 'demo' | 'user', masked: string }>({ type: 'demo', masked: 'No API Key' })
-  const [authStatus, setAuthStatus] = useState<{ checked: boolean; valid: boolean; error?: string }>({ checked: false, valid: false })
-
-  // Update API key status when client changes
-  useEffect(() => {
-    setApiKeyStatus(getApiKeyStatus())
-  }, [getApiKeyStatus])
-
-  // Check authentication when API client is available
-  useEffect(() => {
-    if (apiClient && !authStatus.checked) {
-      const checkAuth = async () => {
-        try {
-          const result = await apiClient.checkAuth()
-          setAuthStatus({ checked: true, valid: result.valid, error: result.error })
-          if (!result.valid) {
-            toast.error(`Authentication failed: ${result.error}`)
-          }
-        } catch {
-          setAuthStatus({ checked: true, valid: false, error: 'Auth check failed' })
-          toast.error('Failed to verify API key')
-        }
-      }
-      checkAuth()
-    }
-  }, [apiClient, authStatus.checked])
-
-  // Handle API key changes
-  const handleApiKeyChange = useCallback(async (newApiKey: string | null) => {
-    if (!apiClient) return
-    
-    try {
-      apiClient.setUserApiKey(newApiKey)
-      setApiKeyStatus(getApiKeyStatus())
-      setAuthStatus({ checked: false, valid: false }) // Reset auth status
-      
-      // Re-check authentication with new key
-      const result = await apiClient.checkAuth()
-      setAuthStatus({ checked: true, valid: result.valid, error: result.error })
-      
-      if (result.valid) {
-        toast.success(newApiKey ? 'API key updated and verified' : 'Switched to demo key')
-      } else {
-        toast.error(`API key failed verification: ${result.error}`)
-      }
-    } catch {
-      toast.error('Failed to update API key')
-      setAuthStatus({ checked: true, valid: false, error: 'Update failed' })
-    }
-  }, [apiClient, getApiKeyStatus])
+  // Handle API key changes - now just a placeholder since keys are server-side
+  const handleApiKeyChange = useCallback(async () => {
+    // API keys are now configured server-side only
+    toast.info('API keys are configured server-side. Please set environment variables in your deployment.')
+  }, [])
 
   // Handle VRP solving
   const handleSolve = useCallback(async () => {
-    if (!apiClient) {
-      toast.error('No API client available')
-      return
-    }
-
     if (!validationResult.valid) {
       toast.error('Please fix validation errors before sending')
       return
@@ -108,12 +42,29 @@ export function VrpExplorer() {
     try {
       const toastId = toast.loading('Solving VRP problem...')
       
-      const response = await apiClient.solveVrp(requestData)
+      // Make direct API call to our server-side route
+      const response = await fetch('/api/vrp/solve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new VrpApiError(
+          errorData.error || 'Request failed',
+          errorData.type || 'unknown'
+        )
+      }
+
+      const result = await response.json()
       
       toast.dismiss(toastId)
       toast.success('VRP problem solved successfully!')
       
-      setResponseData(response)
+      setResponseData(result)
     } catch (error) {
       toast.dismiss()
       
@@ -123,7 +74,7 @@ export function VrpExplorer() {
         // Handle specific error types
         switch (error.type) {
           case 'authentication':
-            toast.error('Please check your API key in the header')
+            toast.error('Check server-side API key configuration')
             break
           case 'validation':
             toast.error('Please check your request data format')
@@ -142,7 +93,7 @@ export function VrpExplorer() {
     } finally {
       setIsLoading(false)
     }
-  }, [apiClient, requestData, validationResult.valid])
+  }, [requestData, validationResult.valid])
 
   // Handle request data changes
   const handleRequestChange = useCallback((newRequestData: Record<string, unknown>) => {

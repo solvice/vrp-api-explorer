@@ -7,6 +7,8 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.OPENAI_API_KEY
 
     if (!apiKey) {
+      console.error('❌ OpenAI API key not found in environment variables')
+      console.error('Available env vars:', Object.keys(process.env).filter(key => key.includes('OPENAI')))
       return NextResponse.json(
         { error: 'OpenAI API key not configured on server' },
         { status: 500 }

@@ -24,15 +24,9 @@ export class VrpApiClient {
   private demoApiKey: string | null
 
   constructor(demoApiKey?: string) {
-    // Get demo key from environment or parameter
-    this.demoApiKey = demoApiKey || process.env.NEXT_PUBLIC_SOLVICE_API_KEY || null
-
-    // Get effective API key (user key takes precedence)
-    const effectiveApiKey = this.getUserApiKey() || this.demoApiKey
-
-    if (!effectiveApiKey) {
-      throw new Error('No API key available. Set SOLVICE_API_KEY environment variable or provide user API key.')
-    }
+    // No longer need to validate API keys on client-side
+    // All API calls go through our server-side routes
+    this.demoApiKey = demoApiKey || 'demo-key-placeholder'
   }
 
   /**
@@ -111,7 +105,7 @@ export class VrpApiClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getEffectiveApiKey()}`
+          // No longer need Authorization header - API key is handled server-side
         },
         body: JSON.stringify(request)
       })
@@ -198,21 +192,10 @@ export class VrpApiClient {
    * Get current API key status for UI display
    */
   getApiKeyStatus(): { type: 'demo' | 'user', masked: string } {
-    const userKey = this.getUserApiKey()
-    if (userKey) {
-      return {
-        type: 'user',
-        masked: `${userKey.substring(0, 8)}...${userKey.substring(userKey.length - 4)}`
-      }
+    // API keys are now handled server-side, so always return configured status
+    return {
+      type: 'user',
+      masked: 'Configured (Server-side)'
     }
-    
-    if (this.demoApiKey) {
-      return {
-        type: 'demo',
-        masked: 'Demo Key'
-      }
-    }
-
-    throw new Error('No API key configured')
   }
 }
