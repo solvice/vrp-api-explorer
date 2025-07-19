@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { MessageType } from './ChatMessage'
+import { ChatPersistence } from './ChatPersistence'
 
 export interface ChatMessage {
   id: string
@@ -31,6 +32,21 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
   const [isProcessing, setIsProcessingState] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
 
+  // Load messages from localStorage on mount
+  useEffect(() => {
+    const savedMessages = ChatPersistence.loadMessages()
+    if (savedMessages.length > 0) {
+      setMessages(savedMessages)
+    }
+  }, [])
+
+  // Save messages to localStorage whenever messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      ChatPersistence.saveMessages(messages)
+    }
+  }, [messages])
+
   const togglePane = () => {
     setIsOpen(prev => !prev)
   }
@@ -46,11 +62,15 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
       content: content.trim(),
       timestamp: new Date()
     }
-    setMessages(prev => [...prev, newMessage])
+    setMessages(prev => {
+      const updatedMessages = [...prev, newMessage]
+      return updatedMessages
+    })
   }
 
   const clearMessages = () => {
     setMessages([])
+    ChatPersistence.clearMessages()
   }
 
   const value: VrpAssistantContextType = {
