@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import JsonView from '@uiw/react-json-view'
 import { Editor } from '@monaco-editor/react'
+import type { editor } from 'monaco-editor'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { validateVrpRequest, ValidationResult } from '@/lib/vrp-schema'
-import { CheckCircle, XCircle, Loader2, Play, Settings } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, Play, Settings, Minimize2, Maximize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -49,6 +50,7 @@ export function VrpJsonEditor({
   const [tempApiKey, setTempApiKey] = useState('')
   const [jsonString, setJsonString] = useState(() => JSON.stringify(requestData, null, 2))
   const [parseError, setParseError] = useState<string | null>(null)
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
 
   // Validate data and notify parent
   const validateData = useCallback((data: Record<string, unknown>) => {
@@ -114,6 +116,22 @@ export function VrpJsonEditor({
       setParseError(null)
       onChange(newData as unknown as Record<string, unknown>)
       validateData(newData as unknown as Record<string, unknown>)
+    }
+  }
+
+  const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor) => {
+    editorRef.current = editor
+  }
+
+  const handleFoldAll = () => {
+    if (editorRef.current) {
+      editorRef.current.getAction('editor.foldAll')?.run()
+    }
+  }
+
+  const handleUnfoldAll = () => {
+    if (editorRef.current) {
+      editorRef.current.getAction('editor.unfoldAll')?.run()
     }
   }
 
@@ -363,7 +381,45 @@ export function VrpJsonEditor({
               </SelectContent>
             </Select>
           </div>
-          {renderValidationStatus()}
+          
+          <div className="flex items-center space-x-3">
+            {/* Folding Controls */}
+            <div className="flex items-center space-x-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleFoldAll}
+                    className="h-6 w-6 p-0"
+                  >
+                    <Minimize2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Fold All</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleUnfoldAll}
+                    className="h-6 w-6 p-0"
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Unfold All</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            
+            {renderValidationStatus()}
+          </div>
         </div>
         
         <div className="flex-1 flex flex-col min-h-0">
@@ -373,6 +429,7 @@ export function VrpJsonEditor({
               defaultLanguage="json"
               value={jsonString}
               onChange={handleMonacoChange}
+              onMount={handleEditorDidMount}
               options={{
                 automaticLayout: true,
                 fontSize: 12,
@@ -381,6 +438,10 @@ export function VrpJsonEditor({
                 wordWrap: 'on',
                 lineNumbers: 'on',
                 folding: true,
+                foldingStrategy: 'indentation',
+                foldingHighlight: true,
+                unfoldOnClickAfterEndOfLine: true,
+                showFoldingControls: 'always',
                 bracketPairColorization: { enabled: true },
                 formatOnPaste: true,
                 formatOnType: true,

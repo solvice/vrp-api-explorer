@@ -102,6 +102,9 @@ importers:
       jest-environment-jsdom:
         specifier: ^30.0.4
         version: 30.0.4
+      monaco-editor:
+        specifier: ^0.52.2
+        version: 0.52.2
       puppeteer:
         specifier: ^24.14.0
         version: 24.14.0(typescript@5.8.3)
