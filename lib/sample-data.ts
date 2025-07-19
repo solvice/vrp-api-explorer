@@ -180,14 +180,14 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
     resources: [
       {
         name: "vehicle_north",
-        location: {
-          latitude: 50.99,
-          longitude: 3.81,
-        },
         shifts: [
           {
             from: "2024-01-15T08:00:00Z",
             to: "2024-01-15T18:00:00Z",
+            start: {
+              latitude: 50.99,
+              longitude: 3.81,
+            },
           },
         ],
       },
@@ -195,7 +195,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
     options: {
       partialPlanning: true,
       minimizeResources: true,
-      polyline: true,
+      polylines: true,
     },
   };
 }
@@ -229,24 +229,21 @@ function getBigRequestData(): Vrp.VrpSyncSolveParams {
     resources: [
       {
         name: "vehicle_alpha",
-        location: { latitude: 50.99, longitude: 3.81 },
-        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z" }]
+        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }]
       },
       {
         name: "vehicle_beta", 
-        location: { latitude: 50.99, longitude: 3.81 },
-        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z" }]
+        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }]
       },
       {
         name: "vehicle_gamma",
-        location: { latitude: 50.99, longitude: 3.81 },
-        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z" }]
+        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }]
       }
     ],
     options: {
       partialPlanning: true,
       minimizeResources: true,
-      polyline: true
+      polylines: true
     }
   }
 }
@@ -287,27 +284,25 @@ function getFieldServiceData(): Vrp.VrpSyncSolveParams {
     resources: [
       {
         name: "technician_alice",
-        location: { latitude: 50.99, longitude: 3.81 },
         shifts: [
-          { from: "2024-01-15T07:00:00Z", to: "2024-01-15T15:00:00Z" }, // Morning shift
-          { from: "2024-01-15T15:30:00Z", to: "2024-01-15T23:30:00Z" }, // Evening shift  
-          { from: "2024-01-16T06:00:00Z", to: "2024-01-16T14:00:00Z" }  // Next day morning
+          { from: "2024-01-15T07:00:00Z", to: "2024-01-15T15:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }, // Morning shift
+          { from: "2024-01-15T15:30:00Z", to: "2024-01-15T23:30:00Z", start: { latitude: 50.99, longitude: 3.81 } }, // Evening shift  
+          { from: "2024-01-16T06:00:00Z", to: "2024-01-16T14:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }  // Next day morning
         ]
       },
       {
         name: "technician_bob",
-        location: { latitude: 50.99, longitude: 3.81 },
         shifts: [
-          { from: "2024-01-15T08:00:00Z", to: "2024-01-15T16:00:00Z" }, // Day shift
-          { from: "2024-01-15T16:30:00Z", to: "2024-01-16T00:30:00Z" }, // Night shift
-          { from: "2024-01-16T07:00:00Z", to: "2024-01-16T15:00:00Z" }  // Next day shift
+          { from: "2024-01-15T08:00:00Z", to: "2024-01-15T16:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }, // Day shift
+          { from: "2024-01-15T16:30:00Z", to: "2024-01-16T00:30:00Z", start: { latitude: 50.99, longitude: 3.81 } }, // Night shift
+          { from: "2024-01-16T07:00:00Z", to: "2024-01-16T15:00:00Z", start: { latitude: 50.99, longitude: 3.81 } }  // Next day shift
         ]
       }
     ],
     options: {
       partialPlanning: false, // Try to schedule all jobs
       minimizeResources: false,
-      polyline: true
+      polylines: true
     }
   }
 }
@@ -330,14 +325,14 @@ export function getMinimalSampleData(): Vrp.VrpSyncSolveParams {
     resources: [
       {
         name: "simple_vehicle",
-        location: {
-          latitude: 50.95,
-          longitude: 3.81,
-        },
         shifts: [
           {
             from: "2024-01-15T08:00:00Z",
             to: "2024-01-15T18:00:00Z",
+            start: {
+              latitude: 50.95,
+              longitude: 3.81,
+            },
           },
         ],
       },

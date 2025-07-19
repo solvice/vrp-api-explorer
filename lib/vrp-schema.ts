@@ -8,7 +8,7 @@ export interface ValidationResult {
 /**
  * Validate a VRP request using runtime type checking based on SDK types
  */
-export function validateVrpRequest(request: any): ValidationResult {
+export function validateVrpRequest(request: unknown): ValidationResult {
   const errors: string[] = []
   
   // Check basic structure
@@ -17,29 +17,31 @@ export function validateVrpRequest(request: any): ValidationResult {
   }
   
   // Check required fields
-  if (!Array.isArray(request.jobs)) {
+  if (!Array.isArray((request as {jobs?: unknown}).jobs)) {
     errors.push('jobs: must be an array')
   } else {
     // Validate jobs
-    request.jobs.forEach((job: any, index: number) => {
+    (request as {jobs: unknown[]}).jobs.forEach((job: unknown, index: number) => {
       if (!job || typeof job !== 'object') {
         errors.push(`jobs[${index}]: must be an object`)
         return
       }
       
-      if (!job.name || typeof job.name !== 'string') {
+      const jobObj = job as Record<string, unknown>
+      if (!jobObj.name || typeof jobObj.name !== 'string') {
         errors.push(`jobs[${index}].name: must be a string`)
       }
       
       // Location is optional but if present, validate it
-      if (job.location) {
-        if (typeof job.location !== 'object') {
+      if (jobObj.location) {
+        if (typeof jobObj.location !== 'object' || jobObj.location === null) {
           errors.push(`jobs[${index}].location: must be an object`)
         } else {
-          if (typeof job.location.latitude !== 'number') {
+          const location = jobObj.location as Record<string, unknown>
+          if (typeof location.latitude !== 'number') {
             errors.push(`jobs[${index}].location.latitude: must be a number`)
           }
-          if (typeof job.location.longitude !== 'number') {
+          if (typeof location.longitude !== 'number') {
             errors.push(`jobs[${index}].location.longitude: must be a number`)
           }
         }
@@ -47,35 +49,37 @@ export function validateVrpRequest(request: any): ValidationResult {
     })
   }
   
-  if (!Array.isArray(request.resources)) {
+  if (!Array.isArray((request as {resources?: unknown}).resources)) {
     errors.push('resources: must be an array')
   } else {
     // Validate resources
-    request.resources.forEach((resource: any, index: number) => {
+    (request as {resources: unknown[]}).resources.forEach((resource: unknown, index: number) => {
       if (!resource || typeof resource !== 'object') {
         errors.push(`resources[${index}]: must be an object`)
         return
       }
       
-      if (!resource.name || typeof resource.name !== 'string') {
+      const resourceObj = resource as Record<string, unknown>
+      if (!resourceObj.name || typeof resourceObj.name !== 'string') {
         errors.push(`resources[${index}].name: must be a string`)
       }
       
       // Shifts are required for resources
-      if (!Array.isArray(resource.shifts)) {
+      if (!Array.isArray(resourceObj.shifts)) {
         errors.push(`resources[${index}].shifts: must be an array`)
       } else {
-        resource.shifts.forEach((shift: any, shiftIndex: number) => {
+        (resourceObj.shifts as unknown[]).forEach((shift: unknown, shiftIndex: number) => {
           if (!shift || typeof shift !== 'object') {
             errors.push(`resources[${index}].shifts[${shiftIndex}]: must be an object`)
             return
           }
           
-          if (!shift.from || typeof shift.from !== 'string') {
+          const shiftObj = shift as Record<string, unknown>
+          if (!shiftObj.from || typeof shiftObj.from !== 'string') {
             errors.push(`resources[${index}].shifts[${shiftIndex}].from: must be a string`)
           }
           
-          if (!shift.to || typeof shift.to !== 'string') {
+          if (!shiftObj.to || typeof shiftObj.to !== 'string') {
             errors.push(`resources[${index}].shifts[${shiftIndex}].to: must be a string`)
           }
         })
@@ -92,6 +96,6 @@ export function validateVrpRequest(request: any): ValidationResult {
 /**
  * Type guard to check if an object is a valid VrpSyncSolveParams
  */
-export function isValidVrpRequest(request: any): request is Vrp.VrpSyncSolveParams {
+export function isValidVrpRequest(request: unknown): request is Vrp.VrpSyncSolveParams {
   return validateVrpRequest(request).valid
 }

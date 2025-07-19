@@ -28,25 +28,26 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response)
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('VRP API Error:', error)
 
     // Handle different error types
-    if (error.message?.includes('unauthorized') || error.message?.includes('authentication')) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage?.includes('unauthorized') || errorMessage?.includes('authentication')) {
       return NextResponse.json(
         { error: 'Invalid API key', type: 'authentication' },
         { status: 401 }
       )
     }
 
-    if (error.message?.includes('validation') || error.message?.includes('invalid')) {
+    if (errorMessage?.includes('validation') || errorMessage?.includes('invalid')) {
       return NextResponse.json(
         { error: 'Invalid request data', type: 'validation' },
         { status: 400 }
       )
     }
 
-    if (error.message?.includes('timeout')) {
+    if (errorMessage?.includes('timeout')) {
       return NextResponse.json(
         { error: 'Request timeout', type: 'timeout' },
         { status: 408 }

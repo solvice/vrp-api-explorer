@@ -1,4 +1,3 @@
-import { SolviceVrpSolver } from 'solvice-vrp-solver'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 
 export type VrpApiErrorType = 

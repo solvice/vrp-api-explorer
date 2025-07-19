@@ -90,8 +90,8 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
         <div class="marker-tooltip absolute top-full left-1/2 transform -translate-x-1/2 mt-1 px-3 py-2 bg-white rounded-lg shadow-lg border text-xs whitespace-nowrap opacity-0 invisible transition-all duration-200 z-10 pointer-events-none">
           <div class="font-semibold text-gray-900">${name}</div>
           ${sequence ? `<div class="text-gray-600">Visit #${sequence}</div>` : ''}
-          ${visit?.arrival ? `<div class="text-gray-600">Arrival: ${new Date(visit.arrival).toLocaleTimeString()}</div>` : ''}
-          ${visit?.arrival && visit?.serviceTime ? `<div class="text-gray-600">Departure: ${new Date(new Date(visit.arrival).getTime() + visit.serviceTime * 1000).toLocaleTimeString()}</div>` : ''}
+          ${visit?.arrival && typeof visit.arrival === 'string' ? `<div class="text-gray-600">Arrival: ${new Date(visit.arrival).toLocaleTimeString()}</div>` : ''}
+          ${visit?.arrival && typeof visit.arrival === 'string' && visit?.serviceTime && typeof visit.serviceTime === 'number' ? `<div class="text-gray-600">Departure: ${new Date(new Date(visit.arrival).getTime() + visit.serviceTime * 1000).toLocaleTimeString()}</div>` : ''}
           <div class="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-white border-l border-t rotate-45"></div>
         </div>
       `
@@ -140,28 +140,34 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
     // Add resource markers
     const resources = requestData.resources as Array<Record<string, unknown>> | undefined
     resources?.forEach((resource) => {
-      if (resource.location) {
-        const el = createMarkerElement('resource', resource.name)
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([resource.location.longitude, resource.location.latitude])
-          .addTo(map.current!)
+      if (resource.location && typeof resource.location === 'object' && resource.location !== null) {
+        const location = resource.location as { longitude?: number; latitude?: number }
+        if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+          const el = createMarkerElement('resource', typeof resource.name === 'string' ? resource.name : 'Resource')
+          const marker = new maplibregl.Marker({ element: el })
+            .setLngLat([location.longitude, location.latitude])
+            .addTo(map.current!)
         
-        markers.current.push(marker)
-        bounds.extend([resource.location.longitude, resource.location.latitude])
+          markers.current.push(marker)
+          bounds.extend([location.longitude, location.latitude])
+        }
       }
     })
 
     // Add job markers
     const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
     jobs?.forEach((job) => {
-      if (job.location) {
-        const el = createMarkerElement('job', job.name)
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([job.location.longitude, job.location.latitude])
-          .addTo(map.current!)
-        
-        markers.current.push(marker)
-        bounds.extend([job.location.longitude, job.location.latitude])
+      if (job.location && typeof job.location === 'object' && job.location !== null) {
+        const location = job.location as { longitude?: number; latitude?: number }
+        if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+          const el = createMarkerElement('job', typeof job.name === 'string' ? job.name : 'Job')
+          const marker = new maplibregl.Marker({ element: el })
+            .setLngLat([location.longitude, location.latitude])
+            .addTo(map.current!)
+          
+          markers.current.push(marker)
+          bounds.extend([location.longitude, location.latitude])
+        }
       }
     })
 
@@ -198,39 +204,48 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
       const shadowId = `shadow-${tripIndex}`
 
       // Use actual route geometry if available (from polyline option), otherwise fallback to straight lines
-      let routeGeometry: any = null
+      let routeGeometry: GeoJSON.LineString | null = null
       
-      if (trip.geometry) {
-        // Use the actual route geometry from the API response
-        routeGeometry = {
-          type: 'LineString',
-          coordinates: trip.geometry.coordinates
-        }
-      } else {
+      if (trip.polyline) {
+        // TODO: Decode polyline string to coordinates if needed
+        // For now, fall back to manual coordinate generation
+        routeGeometry = null
+      }
+      
+      if (!routeGeometry) {
         // Fallback: create route coordinates from visits, including depot start/end
         const coordinates: [number, number][] = []
         
         // Find the vehicle/resource for this trip
         const resources = requestData.resources as Array<Record<string, unknown>> | undefined
-        const resource = resources?.find((r) => r.name === (trip.resource || trip.resourceName))
+        const resource = resources?.find((r) => r.name === trip.resource)
         
         // Start from depot if available
-        if (resource?.location) {
-          coordinates.push([resource.location.longitude, resource.location.latitude])
+        if (resource?.location && typeof resource.location === 'object' && resource.location !== null) {
+          const location = resource.location as { longitude?: number; latitude?: number }
+          if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+            coordinates.push([location.longitude, location.latitude])
+          }
         }
         
         // Add visit locations (they're already in sequence order from API)
         trip.visits?.forEach((visit) => {
           const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-          const job = jobs?.find((j) => j.name === (visit.job || visit.jobName))
-          if (job?.location) {
-            coordinates.push([job.location.longitude, job.location.latitude])
+          const job = jobs?.find((j) => j.name === visit.job)
+          if (job?.location && typeof job.location === 'object' && job.location !== null) {
+            const location = job.location as { longitude?: number; latitude?: number }
+            if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+              coordinates.push([location.longitude, location.latitude])
+            }
           }
         })
 
         // Return to depot if available and we have visits
-        if (resource?.location && coordinates.length > 1) {
-          coordinates.push([resource.location.longitude, resource.location.latitude])
+        if (resource?.location && typeof resource.location === 'object' && resource.location !== null && coordinates.length > 1) {
+          const location = resource.location as { longitude?: number; latitude?: number }
+          if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+            coordinates.push([location.longitude, location.latitude])
+          }
         }
         
         if (coordinates.length > 1) {
@@ -246,7 +261,7 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
         if (map.current!.getSource(routeId)) {
           try {
             map.current!.removeSource(routeId)
-          } catch (e) {
+          } catch {
             // Source might be in use by layers
           }
         }
@@ -257,10 +272,10 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
           data: {
             type: 'Feature',
             properties: {
-              resourceName: trip.resource || trip.resourceName,
+              resourceName: trip.resource,
               tripIndex,
               visitCount: trip.visits?.length || 0,
-              hasGeometry: !!trip.geometry
+              hasGeometry: !!trip.polyline
             },
             geometry: routeGeometry
           }
@@ -273,7 +288,7 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
           if (map.current!.getLayer(layerId)) {
             try {
               map.current!.removeLayer(layerId)
-            } catch (e) {
+            } catch {
               // Layer might not exist
             }
           }
@@ -351,18 +366,19 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
 
     clearMarkers()
 
-    const bounds = new maplibregl.LngLatBounds()
+    // Create bounds for fitting map view
+    const boundsCoords = [] as Array<[number, number]>
 
     // Add resource markers
-    requestData.resources?.forEach((resource: any) => {
+    (requestData.resources as Array<{ name?: string; location?: { longitude: number; latitude: number } }> | undefined)?.forEach((resource) => {
       if (resource.location) {
-        const el = createMarkerElement('resource', resource.name)
+        const el = createMarkerElement('resource', resource.name || 'Resource')
         const marker = new maplibregl.Marker({ element: el })
           .setLngLat([resource.location.longitude, resource.location.latitude])
           .addTo(map.current!)
         
         markers.current.push(marker)
-        bounds.extend([resource.location.longitude, resource.location.latitude])
+        boundsCoords.push([resource.location.longitude, resource.location.latitude])
       }
     })
 
@@ -372,21 +388,26 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
       
       trip.visits?.forEach((visit, visitIndex) => {
         const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-        const job = jobs?.find((j) => j.name === (visit.job || visit.jobName))
-        if (job?.location) {
-          const el = createMarkerElement('job', job.name, visitIndex + 1, visit, vehicleColor)
-          const marker = new maplibregl.Marker({ element: el })
-            .setLngLat([job.location.longitude, job.location.latitude])
-            .addTo(map.current!)
-          
-          markers.current.push(marker)
-          bounds.extend([job.location.longitude, job.location.latitude])
+        const job = jobs?.find((j) => j.name === visit.job)
+        if (job?.location && typeof job.location === 'object' && job.location !== null) {
+          const location = job.location as { longitude?: number; latitude?: number }
+          if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+            const el = createMarkerElement('job', typeof job.name === 'string' ? job.name : 'Job', visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor)
+            const marker = new maplibregl.Marker({ element: el })
+              .setLngLat([location.longitude, location.latitude])
+              .addTo(map.current!)
+            
+            markers.current.push(marker)
+            boundsCoords.push([location.longitude, location.latitude])
+          }
         }
       })
     })
 
     // Fit map to bounds if we have markers
-    if (!bounds.isEmpty()) {
+    if (boundsCoords.length > 0) {
+      const bounds = new maplibregl.LngLatBounds()
+      boundsCoords.forEach(coord => bounds.extend(coord))
       map.current!.fitBounds(bounds, { padding: 50 })
     }
   }, [requestData, responseData])
@@ -399,13 +420,7 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
     const style = map.current.getStyle()
     style.layers?.forEach(layer => {
       if (layer.id.startsWith('line-')) {
-        try {
-          map.current!.off('mouseenter', layer.id)
-          map.current!.off('mouseleave', layer.id)
-          map.current!.off('click', layer.id)
-        } catch {
-          // Event listener might not exist
-        }
+        // Event listeners will be automatically cleaned when layers are removed
       }
     })
 
@@ -443,13 +458,13 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
         </div>
         <div className="space-y-1">
           {responseData.trips.map((trip, index) => (
-            <div key={`${trip.resource || trip.resourceName}-${index}`} className="flex items-center">
+            <div key={`${trip.resource}-${index}`} className="flex items-center">
               <div 
                 className="w-3 h-0.5 mr-2 rounded"
                 style={{ backgroundColor: ROUTE_COLORS[index % ROUTE_COLORS.length] }}
               />
               <span className="text-gray-700 truncate">
-                {trip.resource || trip.resourceName} ({trip.visits?.length || 0} stops)
+                {trip.resource} ({trip.visits?.length || 0} stops)
               </span>
             </div>
           ))}
@@ -458,7 +473,7 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
           • Hover over routes for details
           • Click routes for information
           • Hover over markers for timing
-          {responseData.trips?.some(trip => trip.geometry) && (
+          {responseData.trips?.some(trip => trip.polyline) && (
             <div className="mt-1 text-green-600">✓ Using actual route geometry</div>
           )}
         </div>

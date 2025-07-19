@@ -57,7 +57,7 @@ export function VrpExplorer() {
           if (!result.valid) {
             toast.error(`Authentication failed: ${result.error}`)
           }
-        } catch (error) {
+        } catch {
           setAuthStatus({ checked: true, valid: false, error: 'Auth check failed' })
           toast.error('Failed to verify API key')
         }
@@ -84,7 +84,7 @@ export function VrpExplorer() {
       } else {
         toast.error(`API key failed verification: ${result.error}`)
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to update API key')
       setAuthStatus({ checked: true, valid: false, error: 'Update failed' })
     }
@@ -146,7 +146,7 @@ export function VrpExplorer() {
 
   // Handle request data changes
   const handleRequestChange = useCallback((newRequestData: Record<string, unknown>) => {
-    setRequestData(newRequestData)
+    setRequestData(newRequestData as unknown as Vrp.VrpSyncSolveParams)
     // Clear response when request changes
     setResponseData(null)
   }, [])
@@ -171,7 +171,7 @@ export function VrpExplorer() {
       <VrpLayout
         leftPanel={
           <VrpJsonEditor
-            requestData={requestData}
+            requestData={requestData as unknown as Record<string, unknown>}
             responseData={responseData}
             onChange={handleRequestChange}
             onValidationChange={handleValidationChange}
@@ -186,7 +186,7 @@ export function VrpExplorer() {
         }
         rightPanel={
           <VrpMap
-            requestData={requestData}
+            requestData={requestData as unknown as Record<string, unknown>}
             responseData={responseData}
           />
         }

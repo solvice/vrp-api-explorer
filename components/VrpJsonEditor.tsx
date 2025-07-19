@@ -64,6 +64,12 @@ export function VrpJsonEditor({
     validateData(value)
   }
 
+  const handleJsonViewChange = (edit: unknown) => {
+    if (edit && typeof edit === 'object' && edit !== null && 'src' in edit) {
+      handleRequestChange((edit as { src: Record<string, unknown> }).src)
+    }
+  }
+
   const handleApiKeySubmit = () => {
     if (onApiKeyChange) {
       onApiKeyChange(tempApiKey || null)
@@ -81,8 +87,8 @@ export function VrpJsonEditor({
     if (onSampleChange) {
       onSampleChange(sampleType)
       const newData = getSampleVrpData(sampleType)
-      onChange(newData)
-      validateData(newData)
+      onChange(newData as unknown as Record<string, unknown>)
+      validateData(newData as unknown as Record<string, unknown>)
     }
   }
 
@@ -335,12 +341,7 @@ export function VrpJsonEditor({
         >
           <JsonView
             value={requestData}
-            onChange={handleRequestChange}
-            editable={{
-              add: true,
-              edit: true,
-              delete: true
-            }}
+            onChange={handleJsonViewChange}
             style={{
               backgroundColor: 'transparent',
               fontSize: '12px',
