@@ -4,7 +4,6 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Send } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 export function ChatInterface() {
   const [message, setMessage] = useState('')
@@ -26,15 +25,15 @@ export function ChatInterface() {
         <div className="flex justify-start">
           <div className="bg-muted rounded-lg p-3 max-w-[80%]">
             <p className="text-sm">
-              Hello! I'm your VRP Assistant. I can help you modify your VRP request using natural language.
+              Hello! I&apos;m your VRP Assistant. I can help you modify your VRP request using natural language.
             </p>
             <p className="text-sm mt-2 text-muted-foreground">
               Try saying things like:
             </p>
             <ul className="text-sm mt-1 text-muted-foreground list-disc list-inside">
-              <li>"Add a new vehicle with capacity 100"</li>
-              <li>"Change the depot location to London"</li>
-              <li>"Add time windows to all locations"</li>
+              <li>&quot;Add a new vehicle with capacity 100&quot;</li>
+              <li>&quot;Change the depot location to London&quot;</li>
+              <li>&quot;Add time windows to all locations&quot;</li>
             </ul>
           </div>
         </div>
