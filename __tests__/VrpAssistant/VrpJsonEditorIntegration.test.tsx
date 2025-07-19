@@ -89,7 +89,8 @@ describe('VrpJsonEditor with VRP Assistant Integration', () => {
     
     // JSON editor should still be functional
     expect(screen.getByTestId('monaco-editor')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument()
+    // Should have both send buttons - one from JSON editor, one from chat
+    expect(screen.getAllByRole('button', { name: /send/i })).toHaveLength(2)
   })
 
   it('uses resizable layout when assistant pane is open', async () => {
@@ -103,8 +104,10 @@ describe('VrpJsonEditor with VRP Assistant Integration', () => {
       expect(screen.getByTestId('vrp-assistant-pane')).toBeInTheDocument()
     })
     
-    // Should have resizable panel group
-    expect(screen.getByTestId('vrp-assistant-pane').querySelector('[data-panel-group]')).toBeInTheDocument()
+    // Should have chat interface components
+    expect(screen.getByTestId('chat-interface')).toBeInTheDocument()
+    expect(screen.getByTestId('chat-messages')).toBeInTheDocument()
+    expect(screen.getByTestId('chat-input')).toBeInTheDocument()
   })
 
   it('preserves existing VrpJsonEditor props and functionality', () => {
@@ -113,6 +116,7 @@ describe('VrpJsonEditor with VRP Assistant Integration', () => {
     // All existing elements should still be present
     expect(screen.getByText('Request')).toBeInTheDocument()
     expect(screen.getByText('POST /v2/vrp/solve/sync')).toBeInTheDocument()
+    // Should have the JSON editor Send button (there will be 2 after opening assistant)
     expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument()
     expect(screen.getByTestId('monaco-editor')).toBeInTheDocument()
   })

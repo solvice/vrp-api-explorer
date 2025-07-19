@@ -2,16 +2,6 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { VrpAssistantPane } from '@/components/VrpAssistant/VrpAssistantPane'
 import { VrpAssistantProvider, useVrpAssistant } from '@/components/VrpAssistant/VrpAssistantContext'
 
-// Mock the resizable components to avoid ES module issues in Jest
-jest.mock('../../components/ui/resizable', () => ({
-  ResizablePanelGroup: ({ children, direction }: any) => 
-    <div data-panel-group data-direction={direction}>{children}</div>,
-  ResizablePanel: ({ children, defaultSize, minSize }: any) => 
-    <div data-panel data-default-size={defaultSize} data-min-size={minSize}>{children}</div>,
-  ResizableHandle: ({ withHandle }: any) => 
-    <div data-resize-handle data-with-handle={withHandle} />
-}))
-
 // Mock component to control context state for testing
 const TestComponent = () => {
   const { isOpen, togglePane } = useVrpAssistant()
@@ -51,7 +41,7 @@ describe('VrpAssistantPane', () => {
     expect(screen.getByTestId('vrp-assistant-pane')).toBeInTheDocument()
   })
 
-  it('displays placeholder content when open', () => {
+  it('displays chat interface when open', () => {
     render(
       <VrpAssistantProvider>
         <VrpAssistantPane />
@@ -62,7 +52,8 @@ describe('VrpAssistantPane', () => {
     // Open the pane
     fireEvent.click(screen.getByTestId('toggle'))
     
-    expect(screen.getByText('VRP Assistant Chat')).toBeInTheDocument()
+    expect(screen.getByTestId('chat-interface')).toBeInTheDocument()
+    expect(screen.getByText(/Hello! I'm your VRP Assistant/)).toBeInTheDocument()
   })
 
   it('has correct CSS classes for styling', () => {
@@ -80,7 +71,7 @@ describe('VrpAssistantPane', () => {
     expect(pane).toHaveClass('h-full', 'bg-background', 'border-t')
   })
 
-  it('uses ResizablePanelGroup structure', () => {
+  it('contains chat interface components', () => {
     render(
       <VrpAssistantProvider>
         <VrpAssistantPane />
@@ -91,8 +82,10 @@ describe('VrpAssistantPane', () => {
     // Open the pane
     fireEvent.click(screen.getByTestId('toggle'))
     
-    // Should contain resizable panel elements
-    expect(screen.getByTestId('vrp-assistant-pane').querySelector('[data-panel-group]')).toBeInTheDocument()
+    // Should contain chat interface elements
+    expect(screen.getByTestId('chat-messages')).toBeInTheDocument()
+    expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+    expect(screen.getByTestId('send-button')).toBeInTheDocument()
   })
 
   it('handles smooth transitions when opening/closing', () => {
