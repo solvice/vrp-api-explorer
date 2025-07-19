@@ -20,6 +20,85 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SAMPLE_DATASETS, SampleType, getSampleVrpData } from '@/lib/sample-data'
 import { cn } from '@/lib/utils'
 
+// Helper function to find differences between old and new JSON and highlight them
+function highlightChangesAndScroll(
+  editor: editor.IStandaloneCodeEditor,
+  oldJsonString: string,
+  newJsonString: string
+) {
+  try {
+    const oldLines = oldJsonString.split('\n')
+    const newLines = newJsonString.split('\n')
+    const changedLines: number[] = []
+    const addedLines: number[] = []
+    
+    // Simple line-by-line comparison to find changes
+    const maxLines = Math.max(oldLines.length, newLines.length)
+    for (let i = 0; i < maxLines; i++) {
+      const oldLine = oldLines[i] || ''
+      const newLine = newLines[i] || ''
+      
+      if (oldLine.trim() !== newLine.trim()) {
+        changedLines.push(i + 1) // Monaco uses 1-based line numbers
+        
+        // Check if this is a new line (old was empty/missing)
+        if (!oldLine && newLine.trim()) {
+          addedLines.push(i + 1)
+        }
+      }
+    }
+    
+    if (changedLines.length === 0) return
+    
+    console.log(`🎨 Highlighting ${changedLines.length} changed lines:`, changedLines)
+    
+    // Create decorations for changed lines
+    const decorations = changedLines.map(lineNumber => {
+      const isNewLine = addedLines.includes(lineNumber)
+      return {
+        range: {
+          startLineNumber: lineNumber,
+          startColumn: 1,
+          endLineNumber: lineNumber,
+          endColumn: 1
+        },
+        options: {
+          isWholeLine: true,
+          className: isNewLine ? 'ai-added-line' : 'ai-changed-line',
+          glyphMarginClassName: isNewLine ? 'ai-added-glyph' : 'ai-changed-glyph',
+          overviewRulerColor: isNewLine ? '#10b981' : '#22c55e',
+          overviewRulerLane: 4,
+          minimap: {
+            color: isNewLine ? '#10b981' : '#22c55e',
+            position: 1
+          }
+        }
+      }
+    })
+    
+    // Apply decorations
+    const decorationIds = editor.deltaDecorations([], decorations)
+    
+    // Scroll to the first changed line with smooth animation
+    const firstChangedLine = Math.min(...changedLines)
+    console.log(`📍 Scrolling to line ${firstChangedLine}`)
+    
+    // Use revealLineInCenter with smooth scrolling
+    editor.revealLineInCenter(firstChangedLine, 1) // 1 = smooth scrolling
+    
+    // Also focus the editor briefly to draw attention
+    editor.focus()
+    
+    // Remove decorations after 4 seconds with fade
+    setTimeout(() => {
+      editor.deltaDecorations(decorationIds, [])
+    }, 4000)
+    
+  } catch (error) {
+    console.warn('Failed to highlight changes:', error)
+  }
+}
+
 interface VrpJsonEditorProps {
   requestData: Record<string, unknown>
   responseData?: Vrp.OnRouteResponse | null
@@ -33,6 +112,57 @@ interface VrpJsonEditorProps {
   onApiKeyChange?: (apiKey: string | null) => void
   currentSample?: SampleType
   onSampleChange?: (sample: SampleType) => void
+}
+
+// Inject CSS styles for AI change highlighting
+function injectAIHighlightStyles() {
+  const styleId = 'ai-highlight-styles'
+  if (document.getElementById(styleId)) return
+  
+  const style = document.createElement('style')
+  style.id = styleId
+  style.textContent = `
+    .ai-changed-line {
+      background-color: rgba(34, 197, 94, 0.1) !important;
+      border-left: 3px solid #22c55e !important;
+      animation: ai-highlight-fade 4s ease-out;
+    }
+    
+    .ai-added-line {
+      background-color: rgba(16, 185, 129, 0.15) !important;
+      border-left: 3px solid #10b981 !important;
+      animation: ai-added-fade 4s ease-out;
+    }
+    
+    .ai-changed-glyph {
+      background-color: #22c55e !important;
+      width: 4px !important;
+    }
+    
+    .ai-added-glyph {
+      background-color: #10b981 !important;
+      width: 4px !important;
+    }
+    
+    @keyframes ai-highlight-fade {
+      0% {
+        background-color: rgba(34, 197, 94, 0.3);
+      }
+      100% {
+        background-color: rgba(34, 197, 94, 0.1);
+      }
+    }
+    
+    @keyframes ai-added-fade {
+      0% {
+        background-color: rgba(16, 185, 129, 0.35);
+      }
+      100% {
+        background-color: rgba(16, 185, 129, 0.15);
+      }
+    }
+  `
+  document.head.appendChild(style)
 }
 
 function VrpJsonEditorContent({
@@ -49,13 +179,18 @@ function VrpJsonEditorContent({
   currentSample = 'simple',
   onSampleChange
 }: VrpJsonEditorProps) {
-  const { isOpen } = useVrpAssistant()
+  const { isOpen, setVrpData, setOnVrpDataUpdate } = useVrpAssistant()
   const [validationResult, setValidationResult] = useState<ValidationResult>({ valid: true, errors: [] })
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const [tempApiKey, setTempApiKey] = useState('')
   const [jsonString, setJsonString] = useState(() => JSON.stringify(requestData, null, 2))
   const [parseError, setParseError] = useState<string | null>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+
+  // Inject CSS styles for AI highlighting on mount
+  useEffect(() => {
+    injectAIHighlightStyles()
+  }, [])
 
   // Validate data and notify parent
   const validateData = useCallback((data: Record<string, unknown>) => {
@@ -67,16 +202,59 @@ function VrpJsonEditorContent({
   // Keep JSON string in sync with requestData changes (from sample selection)
   useEffect(() => {
     const newJsonString = JSON.stringify(requestData, null, 2)
-    if (newJsonString !== jsonString) {
-      setJsonString(newJsonString)
-      setParseError(null)
-    }
-  }, [requestData, jsonString])
+    setJsonString(newJsonString)
+    setParseError(null)
+  }, [requestData])
 
   // Initial validation
   useEffect(() => {
     validateData(requestData)
   }, [requestData, validateData])
+
+  // Set up VRP Assistant integration
+  useEffect(() => {
+    // Sync current VRP data to assistant
+    if (requestData && typeof requestData === 'object') {
+      setVrpData(requestData as unknown as Vrp.VrpSyncSolveParams)
+    }
+  }, [requestData, setVrpData])
+
+  // Set up callback for AI modifications (separate useEffect to avoid circular dependency)
+  useEffect(() => {
+    const handleVrpDataUpdate = (modifiedData: Vrp.VrpSyncSolveParams) => {
+      console.log('🤖 VrpJsonEditor: AI modified data, updating editor and notifying parent...', {
+        hasJobs: Array.isArray(modifiedData?.jobs),
+        jobCount: modifiedData?.jobs?.length,
+        hasResources: Array.isArray(modifiedData?.resources),
+        resourceCount: modifiedData?.resources?.length
+      })
+      
+      const editor = editorRef.current
+      const oldJsonString = jsonString
+      const newJsonString = JSON.stringify(modifiedData, null, 2)
+      
+      // Update the JSON string in the editor
+      setJsonString(newJsonString)
+      setParseError(null)
+      
+      // Notify parent component of the change
+      console.log('🤖 VrpJsonEditor: Calling onChange to notify VrpExplorer...')
+      onChange(modifiedData as unknown as Record<string, unknown>)
+      
+      // Validate the new data
+      validateData(modifiedData as unknown as Record<string, unknown>)
+      
+      // Add visual feedback and scrolling if editor is available
+      if (editor) {
+        // Give a moment for the new content to be set
+        setTimeout(() => {
+          highlightChangesAndScroll(editor, oldJsonString, newJsonString)
+        }, 100)
+      }
+    }
+
+    setOnVrpDataUpdate(handleVrpDataUpdate)
+  }, [setOnVrpDataUpdate, onChange, validateData, jsonString])
 
   const handleRequestChange = (value: Record<string, unknown>) => {
     onChange(value)
@@ -128,17 +306,6 @@ function VrpJsonEditorContent({
     editorRef.current = editor
   }
 
-  const handleFoldAll = () => {
-    if (editorRef.current) {
-      editorRef.current.getAction('editor.foldAll')?.run()
-    }
-  }
-
-  const handleUnfoldAll = () => {
-    if (editorRef.current) {
-      editorRef.current.getAction('editor.unfoldAll')?.run()
-    }
-  }
 
 
   const renderValidationStatus = () => {
@@ -359,7 +526,7 @@ function VrpJsonEditorContent({
 
       {/* Request Editor */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between p-3 border-b bg-muted/50">
+        <div className="flex items-center justify-between p-3 border-b bg-muted/50 relative">
           <div className="flex items-center space-x-3">
             <h3 className="text-sm font-medium">Request</h3>
             <Select value={currentSample} onValueChange={handleSampleChange}>
@@ -386,47 +553,13 @@ function VrpJsonEditorContent({
             </Select>
           </div>
           
-          <div className="flex items-center space-x-3">
-            {/* Folding Controls */}
-            <div className="flex items-center space-x-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleFoldAll}
-                    className="h-6 w-6 p-0"
-                  >
-                    <Minimize2 className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Fold All</p>
-                </TooltipContent>
-              </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleUnfoldAll}
-                    className="h-6 w-6 p-0"
-                  >
-                    <Maximize2 className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Unfold All</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            
-            {renderValidationStatus()}
+          {/* Prominent AI Assistant Button - positioned in editor area */}
+          <div className="absolute top-3 right-3 z-20">
+            <VrpAssistantButton prominent />
           </div>
         </div>
         
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col min-h-0 relative">
           <div className="flex-1 min-h-0" data-testid="json-editor">
             <Editor
               height="100%"
@@ -466,6 +599,13 @@ function VrpJsonEditorContent({
             />
           </div>
           
+          {/* Floating Validation Status */}
+          <div className="absolute bottom-3 right-3 z-10">
+            <div className="bg-background/95 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-lg">
+              {renderValidationStatus()}
+            </div>
+          </div>
+          
           {renderValidationErrors()}
         </div>
       </div>
@@ -500,27 +640,21 @@ function VrpJsonEditorContent({
     </div>
   )
 
-  if (!isOpen) {
-    return (
-      <>
-        <VrpAssistantButton />
-        {editorContent}
-      </>
-    )
-  }
-
   return (
     <>
-      <VrpAssistantButton />
-      <ResizablePanelGroup direction="vertical" className="h-full">
-        <ResizablePanel defaultSize={60} minSize={30}>
-          {editorContent}
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={40} minSize={20}>
-          <VrpAssistantPane />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+      {!isOpen ? (
+        editorContent
+      ) : (
+        <ResizablePanelGroup direction="vertical" className="h-full">
+          <ResizablePanel defaultSize={60} minSize={30}>
+            {editorContent}
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={40} minSize={20}>
+            <VrpAssistantPane />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
     </>
   )
 }

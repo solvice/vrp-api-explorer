@@ -35,6 +35,7 @@ pnpm test:hydration         # Check for SSR/hydration issues
 - **Styling**: Tailwind CSS with custom components
 - **Maps**: MapLibre GL with Solvice styling
 - **API Integration**: Solvice VRP Solver SDK (`solvice-vrp-solver`)
+- **AI Integration**: OpenAI GPT-4 for natural language VRP modifications
 - **Testing**: Jest with Testing Library
 - **UI Components**: Shadcn/ui with Radix primitives
 
@@ -46,10 +47,19 @@ pnpm test:hydration         # Check for SSR/hydration issues
 3. `VrpJsonEditor` - Left pane with JSON editing and validation
 4. `VrpMap` - Right pane with MapLibre GL visualization
 
+**VRP AI Assistant Architecture**:
+- `VrpAssistantProvider` - Context provider managing AI assistant state and OpenAI integration
+- `VrpAssistantButton` - Fixed floating action button to toggle assistant pane
+- `VrpAssistantPane` - Collapsible chat interface panel with header and status indicators
+- `ShadcnChatInterface` - Main chat UI with message list, input, and suggestion buttons
+- `OpenAIService` - GPT-4 integration for natural language VRP data modifications
+- `ErrorHandlingService` - Comprehensive error handling with retry logic and user-friendly messaging
+
 **API Architecture**:
 - Client-side `VrpApiClient` (`lib/vrp-api.ts`) handles API key management and error mapping
 - Server-side API route (`app/api/vrp/solve/route.ts`) proxies requests to Solvice API
 - Runtime validation using actual Solvice SDK types (`lib/vrp-schema.ts`)
+- OpenAI GPT-4 integration for AI-powered VRP data modifications
 
 ### File Structure Patterns
 
@@ -61,15 +71,30 @@ app/
 
 components/
 ├── Vrp*.tsx                 # VRP-specific components
+├── VrpAssistant/           # AI Assistant components
+│   ├── VrpAssistantProvider.tsx  # Context provider
+│   ├── VrpAssistantButton.tsx    # Toggle button
+│   ├── VrpAssistantPane.tsx      # Main panel
+│   ├── ShadcnChatInterface.tsx   # Chat UI
+│   ├── OpenAIService.tsx         # AI integration
+│   └── ChatPersistence.tsx       # Message storage
 └── ui/                      # Reusable Shadcn components
+    ├── chat-message.tsx     # Message components
+    ├── message-list.tsx     # Chat message list
+    ├── typing-indicator.tsx # AI processing indicator
+    └── ...                  # Other UI components
 
 lib/
 ├── vrp-api.ts              # API client with error handling
 ├── vrp-schema.ts           # Runtime validation
+├── error-handling-service.ts # AI error handling & retry logic
 ├── sample-data.ts          # Default VRP problem data
 └── utils.ts                # Tailwind utility functions
 
 __tests__/                   # Jest tests for all components
+├── VrpAssistant/           # AI Assistant tests
+├── e2e/                    # End-to-end tests
+└── lib/                    # Library tests
 ```
 
 ## Development Guidelines
@@ -85,6 +110,9 @@ __tests__/                   # Jest tests for all components
 - State management with React hooks (useState, useEffect, useCallback)
 - Toast notifications via Sonner for user feedback
 - Real-time validation with immediate UI feedback
+- Context providers for complex state management (VRP Assistant)
+- Error boundaries and comprehensive error handling
+- Accessibility features with ARIA labels and keyboard navigation
 
 ### Testing Requirements
 - All components have corresponding test files in `__tests__/`
@@ -102,10 +130,11 @@ __tests__/                   # Jest tests for all components
 
 Required environment variables:
 ```bash
-NEXT_PUBLIC_SOLVICE_API_KEY=your_api_key_here
+NEXT_PUBLIC_SOLVICE_API_KEY=your_solvice_api_key_here
+NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-The `NEXT_PUBLIC_` prefix is required for client-side access in Next.js.
+The `NEXT_PUBLIC_` prefix is required for client-side access in Next.js. The OpenAI API key enables the AI assistant functionality.
 
 ## Map Integration
 
@@ -113,6 +142,23 @@ The `NEXT_PUBLIC_` prefix is required for client-side access in Next.js.
 - Displays VRP problem locations and optimized routes
 - Color-coded vehicle routes with numbered markers
 - Interactive tooltips with timing information
+
+## AI Assistant Integration
+
+### VRP Assistant Features
+- **Natural Language Processing**: Modify VRP data using conversational commands
+- **Context Awareness**: Understands current VRP problem structure and constraints  
+- **Smart Suggestions**: Provides actionable optimization recommendations
+- **Error Recovery**: Robust error handling with user-friendly messaging and retry logic
+- **Chat Persistence**: Messages saved to localStorage for session continuity
+- **Real-time Validation**: Ensures all AI modifications maintain valid VRP structure
+
+### AI Workflow
+1. User types natural language request (e.g., "Add a new vehicle with capacity 100")
+2. `OpenAIService` sends VRP data + request to GPT-4 with structured schema
+3. AI returns modified VRP data with explanation and change summary
+4. Response validated against VRP schema before applying to editor
+5. Changes reflected in JSON editor and map visualization immediately
 
 ## Common Tasks
 
@@ -122,13 +168,21 @@ The `NEXT_PUBLIC_` prefix is required for client-side access in Next.js.
 3. Update `VrpMap` for visualization changes
 4. Add comprehensive tests in `__tests__/`
 
+### Working with AI Assistant
+1. Extend `OpenAIService` system prompts for new VRP features
+2. Update `ErrorHandlingService` for new error scenarios
+3. Add new suggestion patterns in `ShadcnChatInterface`
+4. Test AI modifications thoroughly with edge cases
+
 ### Testing Changes
 - Run `pnpm test:hydration` after any SSR-related changes
 - Use `pnpm test:watch` during development
+- Test AI integration with `scripts/test-openai-chat.js`
 - Ensure all tests pass before committing
 
 ### Debugging API Issues
 - Check browser console for detailed error messages
-- Verify API key in browser localStorage
+- Verify API keys in browser localStorage (Solvice + OpenAI)
 - Use network tab to inspect `/api/vrp/solve` requests
 - Review `VrpApiClient.mapError()` for error categorization
+- Monitor `ErrorHandlingService` logs for AI-related issues

@@ -10,12 +10,16 @@ An interactive web application for exploring and visualizing Vehicle Routing Pro
 - **🔧 API Integration**: Direct integration with Solvice VRP API with proper error handling
 - **⚡ Real-time Validation**: Client-side validation using actual Solvice SDK types
 - **🎨 Professional UI**: Clean, responsive interface built with modern React components
+- **🤖 AI Assistant**: Modify VRP data using natural language with GPT-4 integration
+- **💬 Smart Chat Interface**: Contextual suggestions and conversation-based VRP optimization
+- **🔄 Error Recovery**: Robust error handling with retry logic and user-friendly messaging
 
 ## Screenshots
 
 The application provides a split-pane interface with:
 - **Left Panel**: JSON editor for VRP request data with validation feedback
 - **Right Panel**: Interactive map showing job locations, vehicle depots, and optimized routes
+- **AI Assistant**: Floating chat interface accessible via the robot icon for natural language VRP modifications
 
 ## Getting Started
 
@@ -24,6 +28,7 @@ The application provides a split-pane interface with:
 - Node.js 18+ 
 - pnpm (recommended) or npm
 - A Solvice VRP API key
+- An OpenAI API key (for AI assistant functionality)
 
 ### Installation
 
@@ -42,10 +47,11 @@ The application provides a split-pane interface with:
    
    Create a `.env.local` file in the project root:
    ```bash
-   NEXT_PUBLIC_SOLVICE_API_KEY=your_api_key_here
+   NEXT_PUBLIC_SOLVICE_API_KEY=your_solvice_api_key_here
+   NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
    ```
    
-   > **Note**: The `NEXT_PUBLIC_` prefix is required for client-side access in Next.js
+   > **Note**: The `NEXT_PUBLIC_` prefix is required for client-side access in Next.js. The OpenAI key enables AI assistant features.
 
 4. **Run the development server**
    ```bash
@@ -78,6 +84,12 @@ The application provides a split-pane interface with:
    - Numbered markers showing visit sequence
    - Interactive tooltips with timing information
 
+5. **AI Assistant** (Optional): Use natural language to modify VRP data
+   - Click the robot icon to open the AI chat interface
+   - Type requests like "Add a new vehicle with capacity 100"
+   - AI suggests optimizations and applies changes automatically
+   - Review changes in the JSON editor and map
+
 ### Sample Data
 
 The application includes sample VRP data for Berlin deliveries:
@@ -104,10 +116,17 @@ vrp-api-explorer/
 │   ├── VrpJsonEditor.tsx        # JSON editor with validation
 │   ├── VrpMap.tsx               # Interactive map component
 │   ├── VrpLayout.tsx            # Resizable layout
+│   ├── VrpAssistant/            # AI Assistant components
+│   │   ├── VrpAssistantProvider.tsx  # Context provider
+│   │   ├── VrpAssistantButton.tsx    # Toggle button
+│   │   ├── VrpAssistantPane.tsx      # Chat panel
+│   │   ├── ShadcnChatInterface.tsx   # Chat UI
+│   │   └── OpenAIService.tsx         # AI integration
 │   └── ui/                      # Reusable UI components
 ├── lib/
 │   ├── vrp-api.ts               # Solvice API client
 │   ├── vrp-schema.ts            # Validation using SDK types
+│   ├── error-handling-service.ts # AI error handling & retry logic
 │   └── sample-data.ts           # Sample VRP data
 └── __tests__/                   # Test suites
 ```
@@ -121,6 +140,7 @@ vrp-api-explorer/
 - **Maps**: MapLibre GL with Solvice styling
 - **Validation**: Runtime type checking using Solvice SDK types
 - **API**: Server-side proxy to avoid CORS issues
+- **AI Integration**: OpenAI GPT-4 for natural language VRP modifications
 
 ### Key Features
 
@@ -128,6 +148,9 @@ vrp-api-explorer/
 - **Error Handling**: Comprehensive error mapping and user feedback
 - **Performance**: Optimized rendering and map interactions
 - **Accessibility**: Keyboard navigation and screen reader support
+- **AI-Powered**: Natural language interface for VRP data modifications
+- **Smart Suggestions**: Context-aware optimization recommendations
+- **Chat Persistence**: Conversation history saved to localStorage
 
 ### Testing
 
@@ -196,9 +219,10 @@ The application uses the [Solvice VRP Solver SDK](https://www.npmjs.com/package/
 ### Common Issues
 
 **API Key Not Working**
-- Ensure the key is in `.env.local` with `NEXT_PUBLIC_` prefix
-- Restart the development server after adding the key
+- Ensure Solvice and OpenAI keys are in `.env.local` with `NEXT_PUBLIC_` prefix
+- Restart the development server after adding keys
 - Check browser console for authentication errors
+- Verify OpenAI API key has sufficient credits and permissions
 
 **Map Not Loading**
 - Verify internet connection (Solvice tiles require external access)
@@ -208,6 +232,12 @@ The application uses the [Solvice VRP Solver SDK](https://www.npmjs.com/package/
 - Ensure coordinate format uses `latitude`/`longitude` (not `lat`/`lng`)
 - Verify required fields: `jobs` array and `resources` array
 - Check that datetime strings are in ISO 8601 format
+
+**AI Assistant Not Working**
+- Verify OpenAI API key is configured correctly
+- Check browser console for API rate limits or quota errors
+- Ensure your OpenAI account has sufficient credits
+- Try simpler requests if complex modifications fail
 
 ### Getting Help
 

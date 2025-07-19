@@ -493,12 +493,22 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
   useEffect(() => {
     if (!map.current || isLoading) return
 
+    console.log('🗺️ VrpMap: Map updating due to data change...', {
+      hasRequestData: !!requestData,
+      hasResponseData: !!responseData,
+      jobCount: Array.isArray((requestData as any)?.jobs) ? (requestData as any).jobs.length : 0,
+      resourceCount: Array.isArray((requestData as any)?.resources) ? (requestData as any).resources.length : 0,
+      isLoading
+    })
+
     clearRoutes()
     
     if (responseData) {
+      console.log('🗺️ VrpMap: Rendering solution data (routes + markers)')
       updateMarkersWithSequence()
       addRouteVisualization()
     } else {
+      console.log('🗺️ VrpMap: Rendering request data (markers only)')
       clearMarkers()
       addRequestMarkers()
     }

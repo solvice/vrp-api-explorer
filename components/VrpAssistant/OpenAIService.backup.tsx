@@ -33,9 +33,6 @@ export class OpenAIService {
 
     this.openai = new OpenAI({
       apiKey: key,
-      // Allow in browser/test environments - this is safe for our use case
-      // since we're handling API keys through environment variables
-      dangerouslyAllowBrowser: true,
     });
   }
 
@@ -76,91 +73,85 @@ export class OpenAIService {
     }
   }
 
-  async sendStructuredMessage(message: string, systemPrompt?: string): Promise<VrpModificationResponse> {
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
-
-    if (systemPrompt) {
-      messages.push({
-        role: "system",
-        content: systemPrompt,
-      });
-    }
-
-    messages.push({
-      role: "user",
-      content: message,
-    });
-
+  private async makeAPICall(
+    messages: OpenAIMessage[],
+    retryCount = 0,
+  ): Promise<string> {
     try {
-      console.log('🤖 Calling OpenAI with JSON mode...');
-      console.log('Model: gpt-4o');
-      console.log('Messages length:', messages.length);
-      
-      const completion = await this.openai.chat.completions.create({
-        model: "gpt-4o", // Use gpt-4o for JSON mode
-        messages,
-        max_tokens: 2000,
-        temperature: 0.3,
-        response_format: { type: "json_object" }
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4",
+          messages,
+          max_tokens: 1000,
+          temperature: 0.7,
+        }),
       });
 
-      console.log('✅ OpenAI response received');
-      console.log('Usage:', completion.usage);
+      if (!response.ok) {
+        // Check if we should retry
+        if (this.shouldRetry(response.status) && retryCount < this.maxRetries) {
+          await this.delay(this.retryDelay * (retryCount + 1));
+          return this.makeAPICall(messages, retryCount + 1);
+        }
 
-      const content = completion.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("Invalid response format from OpenAI API - no content");
+        throw new Error(
+          `OpenAI API error: ${response.status} ${response.statusText}`,
+        );
       }
 
-      console.log('📝 Response content length:', content.length);
-      
-      const parsed = JSON.parse(content) as VrpModificationResponse;
-      console.log('✅ Successfully parsed structured response');
-      
-      return parsed;
-    } catch (error: any) {
-      console.error('❌ Error in sendStructuredMessage:', error);
-      console.error('Error type:', typeof error);
-      console.error('Error constructor:', error?.constructor?.name);
-      console.error('Error message:', error?.message);
-      console.error('Error status:', error?.status);
-      console.error('Error code:', error?.code);
-      
-      if (error instanceof OpenAI.APIError) {
-        console.error('OpenAI API Error details:', {
-          status: error.status,
-          message: error.message,
-          code: error.code,
-          type: error.type
-        });
-        throw new Error(`OpenAI API error: ${error.status} ${error.message}`);
+      const data: OpenAIResponse = await response.json();
+
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error("Invalid response format from OpenAI API");
       }
-      
-      // Re-throw with more context
-      throw new Error(`Structured output failed: ${error?.message || 'Unknown error'}`);
+
+      return data.choices[0].message.content;
+    } catch (error) {
+      // Retry on network errors
+      if (this.isNetworkError(error) && retryCount < this.maxRetries) {
+        await this.delay(this.retryDelay * (retryCount + 1));
+        return this.makeAPICall(messages, retryCount + 1);
+      }
+
+      throw error;
     }
   }
 
+  private shouldRetry(status: number): boolean {
+    // Retry on rate limits (429) and server errors (5xx)
+    return status === 429 || (status >= 500 && status < 600);
+  }
+
+  private isNetworkError(error: unknown): boolean {
+    return (
+      error instanceof TypeError ||
+      (error instanceof Error && !!error.message && error.message.includes("network")) ||
+      (error instanceof Error && !!error.message && error.message.includes("fetch"))
+    );
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
   /**
    * Check if the service is properly configured
    */
   isConfigured(): boolean {
-    return Boolean(this.openai);
+    return Boolean(this.apiKey && this.apiKey.trim() !== "");
   }
 
   /**
    * Get a masked version of the API key for display purposes
    */
   getMaskedApiKey(): string {
-    // Since the API key is validated in constructor, if we have an openai instance, we have a valid key
-    if (!this.openai) return "Not configured";
-    
-    // We can't access the key directly from the OpenAI instance, but we know it's configured
-    const key = process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "";
-    if (!key) return "Configured";
-    
-    return `${key.substring(0, 7)}...${key.substring(key.length - 4)}`;
+    if (!this.apiKey) return "Not configured";
+    return `${this.apiKey.substring(0, 7)}...${this.apiKey.substring(this.apiKey.length - 4)}`;
   }
 
   /**
@@ -171,32 +162,21 @@ export class OpenAIService {
   ): Promise<VrpModificationResponse> {
     try {
       return await ErrorHandlingService.withRetry(async () => {
-        const systemPrompt = this.buildStructuredVrpSystemPrompt();
+        const systemPrompt = this.buildVrpSystemPrompt();
         const userMessage = this.buildVrpUserMessage(request);
 
-        const result = await this.sendStructuredMessage(userMessage, systemPrompt);
-        
-        // Validate the modified data structure
-        const validation = VrpSchemaService.validateModification(
-          request.currentData,
-          result.modifiedData,
-        );
-        if (!validation.valid) {
-          throw new Error(
-            `Invalid VRP structure: ${validation.errors.join(", ")}`,
-          );
-        }
+        const response = await this.makeAPICall([
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ]);
 
-        return result;
+        return this.parseVrpResponse(response, request.currentData);
       }, {
         maxRetries: 2,
         baseDelay: 1000,
         maxDelay: 10000
       });
     } catch (error) {
-      console.error('🚨 Raw OpenAI error in modifyVrpData:', error);
-      console.error('🚨 Error message:', error?.message);
-      console.error('🚨 Error stack:', error?.stack);
       const vrpError = ErrorHandlingService.classifyError(error);
       ErrorHandlingService.logError(vrpError, {
         operation: 'modifyVrpData',
@@ -208,47 +188,7 @@ export class OpenAIService {
   }
 
   /**
-   * Build system prompt with VRP schema and instructions for structured output
-   */
-  private buildStructuredVrpSystemPrompt(): string {
-    return `You are a VRP (Vehicle Routing Problem) optimization assistant. Your job is to modify VRP JSON data based on user requests.
-
-${VrpSchemaService.getSchemaForAI()}
-
-## Instructions:
-1. Understand the user's request for VRP modifications
-2. Apply changes to the provided JSON data
-3. Ensure all modifications preserve required structure
-4. Return ONLY a valid JSON object in the exact format specified below
-
-## Required JSON Response Format:
-{
-  "modifiedData": { /* complete modified VRP data */ },
-  "explanation": "Brief explanation of what was changed",
-  "changes": [
-    {
-      "type": "add|modify|remove",
-      "target": "job|resource|option",
-      "description": "Description of this specific change"
-    }
-  ]
-}
-
-## Rules:
-- RESPOND ONLY WITH VALID JSON - no additional text
-- Always preserve the core structure (jobs array, resources array)
-- Keep all existing data unless specifically asked to remove it
-- Use proper ISO datetime formats (YYYY-MM-DDTHH:mm:ssZ)
-- Validate job and resource names are unique
-- Be conservative: ask for clarification if the request is ambiguous
-- Focus on the specific changes requested, don't optimize the entire solution
-- The modifiedData field must contain the complete VRP data structure
-- Provide clear, concise explanations of what was changed
-- List specific changes in the changes array`;
-  }
-
-  /**
-   * Build legacy system prompt (for non-structured calls)
+   * Build system prompt with VRP schema and instructions
    */
   private buildVrpSystemPrompt(): string {
     return `You are a VRP (Vehicle Routing Problem) optimization assistant. Your job is to modify VRP JSON data based on user requests.
@@ -262,8 +202,6 @@ ${VrpSchemaService.getSchemaForAI()}
 4. Return a valid JSON response with the modified data
 
 ## Response Format:
-CRITICAL: You MUST respond with ONLY valid JSON. Do not include any explanatory text before or after the JSON.
-
 Return a JSON object with this exact structure:
 {
   "modifiedData": <the complete modified VRP JSON>,
@@ -271,14 +209,13 @@ Return a JSON object with this exact structure:
   "changes": [
     {
       "type": "add|modify|remove",
-      "target": "job|resource|option", 
+      "target": "job|resource|option",
       "description": "Description of this specific change"
     }
   ]
 }
 
 ## Rules:
-- ONLY return valid JSON - no additional text or explanations outside the JSON
 - Always preserve the core structure (jobs array, resources array)
 - Keep all existing data unless specifically asked to remove it
 - Use proper ISO datetime formats (YYYY-MM-DDTHH:mm:ssZ)
@@ -286,7 +223,6 @@ Return a JSON object with this exact structure:
 - Be conservative: ask for clarification if the request is ambiguous
 - Focus on the specific changes requested, don't optimize the entire solution`;
   }
-
 
   /**
    * Build user message with current data and request
@@ -311,6 +247,49 @@ User request: ${request.userRequest}`;
     return message;
   }
 
+  /**
+   * Parse AI response and validate the result
+   */
+  private parseVrpResponse(
+    response: string,
+    originalData: Vrp.VrpSyncSolveParams,
+  ): VrpModificationResponse {
+    try {
+      // Try to extract JSON from response (handle cases where AI adds explanation outside JSON)
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? jsonMatch[0] : response;
+
+      const parsed = JSON.parse(jsonStr);
+
+      if (!parsed.modifiedData) {
+        throw new Error("Response missing modifiedData field");
+      }
+
+      // Validate the modified data structure
+      const validation = VrpSchemaService.validateModification(
+        originalData,
+        parsed.modifiedData,
+      );
+      if (!validation.valid) {
+        throw new Error(
+          `Invalid VRP structure: ${validation.errors.join(", ")}`,
+        );
+      }
+
+      return {
+        modifiedData: parsed.modifiedData,
+        explanation: parsed.explanation || "VRP data modified successfully",
+        changes: parsed.changes || [],
+      };
+    } catch (error) {
+      // Fallback: return original data with error explanation
+      return {
+        modifiedData: originalData,
+        explanation: `Failed to parse AI response: ${error instanceof Error ? error.message : "Unknown error"}`,
+        changes: [],
+      };
+    }
+  }
 
   /**
    * Generate contextual suggestions based on current VRP data
@@ -340,7 +319,10 @@ ${JSON.stringify(vrpData, null, 2)}
 Return exactly 3-5 suggestions as a JSON array of strings.`;
 
     try {
-      const response = await this.sendMessage(userMessage, systemPrompt);
+      const response = await this.makeAPICall([
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ]);
 
       const suggestions = JSON.parse(response);
       return Array.isArray(suggestions) ? suggestions : [];

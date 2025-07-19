@@ -1,4 +1,4 @@
-import { ChatMessage } from './VrpAssistantContext'
+import { Message } from '@/components/ui/chat-message'
 
 const STORAGE_KEY = 'vrp-assistant-chat-history'
 
@@ -6,7 +6,7 @@ export class ChatPersistence {
   /**
    * Save chat messages to localStorage
    */
-  static saveMessages(messages: ChatMessage[]): void {
+  static saveMessages(messages: Message[]): void {
     try {
       const serializedMessages = JSON.stringify(messages)
       localStorage.setItem(STORAGE_KEY, serializedMessages)
@@ -18,7 +18,7 @@ export class ChatPersistence {
   /**
    * Load chat messages from localStorage
    */
-  static loadMessages(): ChatMessage[] {
+  static loadMessages(): Message[] {
     try {
       const serializedMessages = localStorage.getItem(STORAGE_KEY)
       if (!serializedMessages) {
@@ -27,11 +27,11 @@ export class ChatPersistence {
 
       const messages = JSON.parse(serializedMessages)
       
-      // Ensure timestamps are properly converted back to Date objects
+      // Ensure createdAt dates are properly converted back to Date objects
       return messages.map((msg: Record<string, unknown>) => ({
         ...msg,
-        timestamp: new Date(msg.timestamp as string)
-      }))
+        createdAt: msg.createdAt ? new Date(msg.createdAt as string) : undefined
+      })) as Message[]
     } catch (error) {
       console.warn('Failed to load chat messages from localStorage:', error)
       return []

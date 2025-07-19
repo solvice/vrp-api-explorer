@@ -1,11 +1,11 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { ChatInterface } from '@/components/VrpAssistant/ChatInterface'
+import { ShadcnChatInterface } from '@/components/VrpAssistant/ShadcnChatInterface'
 import { VrpAssistantProvider } from '@/components/VrpAssistant/VrpAssistantContext'
 
-const renderChatInterface = () => {
+const renderShadcnChatInterface = () => {
   return render(
     <VrpAssistantProvider>
-      <ChatInterface />
+      <ShadcnChatInterface />
     </VrpAssistantProvider>
   )
 }
@@ -18,7 +18,7 @@ describe('Chat Message Management', () => {
   })
 
   it('adds user message when form is submitted', () => {
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')
@@ -31,7 +31,7 @@ describe('Chat Message Management', () => {
   })
 
   it('clears input after sending message', () => {
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')
@@ -43,7 +43,7 @@ describe('Chat Message Management', () => {
   })
 
   it('adds multiple messages in sequence', () => {
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')
@@ -60,7 +60,7 @@ describe('Chat Message Management', () => {
   })
 
   it('handles form submission with Enter key', () => {
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     
@@ -71,7 +71,7 @@ describe('Chat Message Management', () => {
   })
 
   it('ignores empty or whitespace-only messages', () => {
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')
@@ -89,7 +89,7 @@ describe('Chat Message Management', () => {
     const mockScrollIntoView = jest.fn()
     Element.prototype.scrollIntoView = mockScrollIntoView
     
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')
@@ -101,7 +101,7 @@ describe('Chat Message Management', () => {
   })
 
   it('displays proper timestamp for messages', () => {
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')

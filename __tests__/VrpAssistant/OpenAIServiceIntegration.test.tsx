@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { ChatInterface } from '@/components/VrpAssistant/ChatInterface'
+import { ShadcnChatInterface } from '@/components/VrpAssistant/ShadcnChatInterface'
 import { VrpAssistantProvider } from '@/components/VrpAssistant/VrpAssistantContext'
 import { OpenAIService } from '@/components/VrpAssistant/OpenAIService'
 
@@ -20,10 +20,10 @@ global.fetch = jest.fn()
 
 // Import OpenAIService for testing
 
-const renderChatInterface = () => {
+const renderShadcnChatInterface = () => {
   return render(
     <VrpAssistantProvider>
-      <ChatInterface />
+      <ShadcnChatInterface />
     </VrpAssistantProvider>
   )
 }

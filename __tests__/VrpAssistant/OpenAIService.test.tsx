@@ -8,6 +8,7 @@ describe('OpenAIService', () => {
     jest.clearAllMocks()
     // Clear any environment variables
     delete process.env.NEXT_PUBLIC_OPENAI_API_KEY
+    delete process.env.OPENAI_API_KEY
   })
 
   describe('initialization', () => {
@@ -18,6 +19,12 @@ describe('OpenAIService', () => {
 
     it('initializes with environment variable API key', () => {
       process.env.NEXT_PUBLIC_OPENAI_API_KEY = 'env-api-key'
+      const service = new OpenAIService()
+      expect(service).toBeInstanceOf(OpenAIService)
+    })
+
+    it('initializes with OPENAI_API_KEY environment variable', () => {
+      process.env.OPENAI_API_KEY = 'env-api-key'
       const service = new OpenAIService()
       expect(service).toBeInstanceOf(OpenAIService)
     })

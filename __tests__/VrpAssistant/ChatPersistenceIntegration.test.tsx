@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { ChatInterface } from '@/components/VrpAssistant/ChatInterface'
+import { ShadcnShadcnChatInterface } from '@/components/VrpAssistant/ShadcnShadcnChatInterface'
 import { VrpAssistantProvider } from '@/components/VrpAssistant/VrpAssistantContext'
 import { ChatPersistence } from '@/components/VrpAssistant/ChatPersistence'
 
@@ -25,10 +25,10 @@ Object.defineProperty(window, 'localStorage', {
   value: localStorageMock
 })
 
-const renderChatInterface = () => {
+const renderShadcnChatInterface = () => {
   return render(
     <VrpAssistantProvider>
-      <ChatInterface />
+      <ShadcnChatInterface />
     </VrpAssistantProvider>
   )
 }
@@ -40,7 +40,7 @@ describe('Chat Persistence Integration', () => {
   })
 
   it('persists messages across component remounts', () => {
-    const { unmount } = renderChatInterface()
+    const { unmount } = renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')
@@ -53,7 +53,7 @@ describe('Chat Persistence Integration', () => {
     
     // Unmount and remount the component
     unmount()
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     // Message should still be there
     expect(screen.getByText('Persistent message')).toBeInTheDocument()
@@ -79,7 +79,7 @@ describe('Chat Persistence Integration', () => {
     ChatPersistence.saveMessages(existingMessages)
     
     // Mount component
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     // Should see the existing messages
     expect(screen.getByText('Existing message')).toBeInTheDocument()
@@ -88,7 +88,7 @@ describe('Chat Persistence Integration', () => {
   })
 
   it('automatically saves new messages to localStorage', () => {
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')
@@ -117,7 +117,7 @@ describe('Chat Persistence Integration', () => {
     })
     
     // Component should still render and work
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')
@@ -133,7 +133,7 @@ describe('Chat Persistence Integration', () => {
   })
 
   it('clears messages from both state and localStorage', () => {
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const input = screen.getByTestId('chat-input')
     const sendButton = screen.getByTestId('send-button')
@@ -165,7 +165,7 @@ describe('Chat Persistence Integration', () => {
     
     ChatPersistence.saveMessages(existingMessages)
     
-    renderChatInterface()
+    renderShadcnChatInterface()
     
     const messageElement = screen.getByTestId('chat-message')
     expect(messageElement).toHaveAttribute('title', testDate.toLocaleString())
