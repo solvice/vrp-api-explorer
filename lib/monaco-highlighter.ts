@@ -165,7 +165,7 @@ export class MonacoHighlighter {
    */
   private registerCustomDecorationTypes(): void {
     // Register decoration types for each change type
-    const changeTypes: ChangeType[] = ['added', 'modified', 'removed']
+    const changeTypes: (keyof HighlightTheme)[] = ['added', 'modified', 'removed']
     
     changeTypes.forEach(type => {
       const theme = this.theme[type]

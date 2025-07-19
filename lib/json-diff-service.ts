@@ -57,8 +57,8 @@ export class JsonDiffService {
     // Compare options
     if (original.options || modified.options) {
       this.compareObjects(
-        original.options || {},
-        modified.options || {},
+        (original.options as Record<string, unknown>) || {},
+        (modified.options as Record<string, unknown>) || {},
         ['options'],
         changes
       )
@@ -78,8 +78,8 @@ export class JsonDiffService {
     // Compare weights
     if (original.weights || modified.weights) {
       this.compareObjects(
-        original.weights || {},
-        modified.weights || {},
+        (original.weights as Record<string, unknown>) || {},
+        (modified.weights as Record<string, unknown>) || {},
         ['weights'],
         changes
       )
@@ -210,16 +210,16 @@ export class JsonDiffService {
     ]
     
     for (const prop of properties) {
-      const originalValue = (original as Record<string, unknown>)[prop]
-      const modifiedValue = (modified as Record<string, unknown>)[prop]
+      const originalValue = (original as unknown as Record<string, unknown>)[prop]
+      const modifiedValue = (modified as unknown as Record<string, unknown>)[prop]
       this.compareValues(originalValue, modifiedValue, [...path, prop], changes)
     }
     
     // Compare location
     if (original.location || modified.location) {
       this.compareObjects(
-        original.location || {},
-        modified.location || {},
+        (original.location as unknown as Record<string, unknown>) || {},
+        (modified.location as unknown as Record<string, unknown>) || {},
         [...path, 'location'],
         changes
       )
@@ -243,7 +243,7 @@ export class JsonDiffService {
         [...path, 'windows'],
         changes,
         (origWindow, modWindow, windowPath, windowChanges) => {
-          this.compareObjects(origWindow as Record<string, unknown>, modWindow as Record<string, unknown>, windowPath, windowChanges)
+          this.compareObjects(origWindow as unknown as Record<string, unknown>, modWindow as unknown as Record<string, unknown>, windowPath, windowChanges)
         }
       )
     }
@@ -256,7 +256,7 @@ export class JsonDiffService {
         [...path, 'tags'],
         changes,
         (origTag, modTag, tagPath, tagChanges) => {
-          this.compareObjects(origTag as Record<string, unknown>, modTag as Record<string, unknown>, tagPath, tagChanges)
+          this.compareObjects(origTag as unknown as Record<string, unknown>, modTag as unknown as Record<string, unknown>, tagPath, tagChanges)
         }
       )
     }
@@ -278,8 +278,8 @@ export class JsonDiffService {
     const properties = ['category', 'hourlyCost', 'maxDriveTime', 'maxDriveTimeInSeconds', 'maxDriveTimeJob']
     
     for (const prop of properties) {
-      const originalValue = (original as Record<string, unknown>)[prop]
-      const modifiedValue = (modified as Record<string, unknown>)[prop]
+      const originalValue = (original as unknown as Record<string, unknown>)[prop]
+      const modifiedValue = (modified as unknown as Record<string, unknown>)[prop]
       this.compareValues(originalValue, modifiedValue, [...path, prop], changes)
     }
     
@@ -310,7 +310,7 @@ export class JsonDiffService {
       [...path, 'shifts'],
       changes,
       (origShift, modShift, shiftPath, shiftChanges) => {
-        this.compareObjects(origShift as Record<string, unknown>, modShift as Record<string, unknown>, shiftPath, shiftChanges)
+        this.compareObjects(origShift as unknown as Record<string, unknown>, modShift as unknown as Record<string, unknown>, shiftPath, shiftChanges)
       }
     )
     
@@ -337,7 +337,7 @@ export class JsonDiffService {
     path: string[],
     changes: JsonChange[]
   ): void {
-    this.compareObjects(original as Record<string, unknown>, modified as Record<string, unknown>, path, changes)
+    this.compareObjects(original as unknown as Record<string, unknown>, modified as unknown as Record<string, unknown>, path, changes)
   }
 
   /**

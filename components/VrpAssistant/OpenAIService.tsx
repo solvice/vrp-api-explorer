@@ -121,8 +121,8 @@ export class OpenAIService {
   private isNetworkError(error: unknown): boolean {
     return (
       error instanceof TypeError ||
-      (error instanceof Error && error.message && error.message.includes("network")) ||
-      (error instanceof Error && error.message && error.message.includes("fetch"))
+      (error instanceof Error && !!error.message && error.message.includes("network")) ||
+      (error instanceof Error && !!error.message && error.message.includes("fetch"))
     );
   }
 

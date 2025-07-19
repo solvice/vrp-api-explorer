@@ -334,14 +334,10 @@ export class HighlightManager {
       }
     })
 
-    // Listen for theme changes
-    const onThemeChange = monaco.editor.onDidChangeColorScheme(() => {
-      const isDark = monaco.editor.getColorScheme() === monaco.editor.ColorScheme.DARK
-      const newTheme = this.getThemeForColorScheme(isDark)
-      this.updateTheme(newTheme)
-    })
+    // Note: Theme change listening not available in this Monaco version
+    // Users can manually update theme using updateTheme() method
 
-    this.disposables.push(onModelChange, onThemeChange)
+    this.disposables.push(onModelChange)
   }
 
   /**
