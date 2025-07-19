@@ -5,6 +5,7 @@ import maplibregl from 'maplibre-gl'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { Loader2, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { decodePolyline, isEncodedPolyline } from '@/lib/polyline-decoder'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 interface VrpMapProps {
@@ -209,10 +210,23 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
       // Use actual route geometry if available (from polyline option), otherwise fallback to straight lines
       let routeGeometry: GeoJSON.LineString | null = null
       
-      if (trip.polyline) {
-        // TODO: Decode polyline string to coordinates if needed
-        // For now, fall back to manual coordinate generation
-        routeGeometry = null
+      if (trip.polyline && typeof trip.polyline === 'string') {
+        try {
+          if (isEncodedPolyline(trip.polyline)) {
+            console.log(`🗺️ Decoding polyline for trip ${tripIndex}:`, trip.polyline.substring(0, 50) + '...')
+            const coordinates = decodePolyline(trip.polyline)
+            if (coordinates.length > 0) {
+              routeGeometry = {
+                type: 'LineString',
+                coordinates
+              }
+              console.log(`✅ Successfully decoded ${coordinates.length} polyline coordinates`)
+            }
+          }
+        } catch (error) {
+          console.warn(`⚠️ Failed to decode polyline for trip ${tripIndex}:`, error)
+          // Fall back to manual coordinate generation
+        }
       }
       
       if (!routeGeometry) {
@@ -281,7 +295,9 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
               resourceName: trip.resource,
               tripIndex,
               visitCount: trip.visits?.length || 0,
-              hasGeometry: !!trip.polyline
+              hasPolyline: !!trip.polyline,
+              isActualRoute: !!trip.polyline && routeGeometry?.coordinates?.length > 2,
+              coordinateCount: routeGeometry?.coordinates?.length || 0
             },
             geometry: routeGeometry
           }
@@ -350,13 +366,20 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
           const feature = e.features?.[0]
           if (feature) {
             const properties = feature.properties
+            const isActualRoute = properties?.isActualRoute
+            const coordinateCount = properties?.coordinateCount || 0
+            
             new maplibregl.Popup()
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div class="p-3">
                   <div class="font-semibold text-gray-900 mb-2">${properties?.resourceName}</div>
                   <div class="text-sm text-gray-600 mb-1">Route ${(properties?.tripIndex || 0) + 1}</div>
-                  <div class="text-sm text-gray-600">${properties?.visitCount || 0} stops</div>
+                  <div class="text-sm text-gray-600 mb-1">${properties?.visitCount || 0} stops</div>
+                  ${isActualRoute ? 
+                    `<div class="text-sm text-green-600">✓ Actual route geometry (${coordinateCount} points)</div>` : 
+                    `<div class="text-sm text-blue-600">⭢ Straight-line approximation</div>`
+                  }
                 </div>
               `)
               .addTo(map.current!)
@@ -481,8 +504,10 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
           • Hover over routes for details
           • Click routes for information
           • Hover over markers for timing
-          {responseData.trips?.some(trip => trip.polyline) && (
-            <div className="mt-1 text-green-600">✓ Using actual route geometry</div>
+          {responseData.trips?.some(trip => trip.polyline) ? (
+            <div className="mt-1 text-green-600">✓ Using actual route polylines</div>
+          ) : (
+            <div className="mt-1 text-blue-600">⭢ Using straight-line approximations</div>
           )}
         </div>
       </div>

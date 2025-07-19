@@ -142,6 +142,7 @@ These are server-side only environment variables for security. API keys are neve
 - Displays VRP problem locations and optimized routes
 - Color-coded vehicle routes with numbered markers
 - Interactive tooltips with timing information
+- **Polyline support**: When `options.polylines: true` is set in the VRP request, actual road geometry is displayed instead of straight-line approximations
 
 ## AI Assistant Integration
 

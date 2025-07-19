@@ -1,6 +1,6 @@
 import { Vrp } from "solvice-vrp-solver/resources/vrp/vrp";
 
-export type SampleType = 'simple' | 'big' | 'fieldService'
+export type SampleType = 'simple' | 'big' | 'fieldService' | 'polylines'
 
 export interface SampleInfo {
   id: SampleType
@@ -30,6 +30,12 @@ export const SAMPLE_DATASETS: SampleInfo[] = [
     name: 'Field Service',
     description: '50 jobs, 2 vehicles, 3 shifts - Multi-shift service scheduling',
     getData: getFieldServiceData
+  },
+  {
+    id: 'polylines',
+    name: 'Route Polylines',
+    description: '15 deliveries, 1 vehicle with actual road geometry',
+    getData: getPolylinesData
   }
 ]
 
@@ -307,6 +313,47 @@ function getFieldServiceData(): Vrp.VrpSyncSolveParams {
       partialPlanning: false, // Try to schedule all jobs
       minimizeResources: false,
       polylines: true
+    }
+  }
+}
+
+/**
+ * Get polylines-enabled sample data - similar to simple TSP but with polylines option
+ */
+function getPolylinesData(): Vrp.VrpSyncSolveParams {
+  return {
+    jobs: [
+      { name: "Brussels", duration: 900, location: { latitude: 50.8465, longitude: 4.3517 } },
+      { name: "Antwerp", duration: 900, location: { latitude: 51.2213, longitude: 4.4051 } },
+      { name: "Ghent", duration: 900, location: { latitude: 51.0538, longitude: 3.7250 } },
+      { name: "Bruges", duration: 900, location: { latitude: 51.2092, longitude: 3.2244 } },
+      { name: "Leuven", duration: 900, location: { latitude: 50.8798, longitude: 4.7005 } },
+      { name: "Mechelen", duration: 900, location: { latitude: 51.0281, longitude: 4.4778 } },
+      { name: "Aalst", duration: 900, location: { latitude: 50.9365, longitude: 4.0435 } },
+      { name: "Sint-Niklaas", duration: 900, location: { latitude: 51.1668, longitude: 4.1437 } },
+      { name: "Dendermonde", duration: 900, location: { latitude: 51.0281, longitude: 4.1016 } },
+      { name: "Kortrijk", duration: 900, location: { latitude: 50.8275, longitude: 3.2647 } },
+      { name: "Ostend", duration: 900, location: { latitude: 51.2172, longitude: 2.9083 } },
+      { name: "Roeselare", duration: 900, location: { latitude: 50.9494, longitude: 3.1228 } },
+      { name: "Turnhout", duration: 900, location: { latitude: 51.3226, longitude: 4.9447 } },
+      { name: "Hasselt", duration: 900, location: { latitude: 50.9307, longitude: 5.3378 } },
+      { name: "Genk", duration: 900, location: { latitude: 50.9658, longitude: 5.4978 } }
+    ],
+    resources: [
+      {
+        name: "delivery_truck",
+        shifts: [
+          {
+            from: "2024-01-15T08:00:00Z",
+            to: "2024-01-15T18:00:00Z",
+            start: { latitude: 50.8465, longitude: 4.3517 }, // Start in Brussels
+            end: { latitude: 50.8465, longitude: 4.3517 }     // Return to Brussels
+          }
+        ]
+      }
+    ],
+    options: {
+      polylines: true  // Enable polyline geometry in response
     }
   }
 }
