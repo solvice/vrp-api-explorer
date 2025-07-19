@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import JsonView from '@uiw/react-json-view'
+import { Editor } from '@monaco-editor/react'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { validateVrpRequest, ValidationResult } from '@/lib/vrp-schema'
 import { CheckCircle, XCircle, Loader2, Play, Settings } from 'lucide-react'
@@ -46,6 +47,8 @@ export function VrpJsonEditor({
   const [validationResult, setValidationResult] = useState<ValidationResult>({ valid: true, errors: [] })
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const [tempApiKey, setTempApiKey] = useState('')
+  const [jsonString, setJsonString] = useState(() => JSON.stringify(requestData, null, 2))
+  const [parseError, setParseError] = useState<string | null>(null)
 
   // Validate data and notify parent
   const validateData = useCallback((data: Record<string, unknown>) => {
@@ -53,6 +56,15 @@ export function VrpJsonEditor({
     setValidationResult(result)
     onValidationChange(result)
   }, [onValidationChange])
+
+  // Keep JSON string in sync with requestData changes (from sample selection)
+  useEffect(() => {
+    const newJsonString = JSON.stringify(requestData, null, 2)
+    if (newJsonString !== jsonString) {
+      setJsonString(newJsonString)
+      setParseError(null)
+    }
+  }, [requestData])
 
   // Initial validation
   useEffect(() => {
@@ -62,6 +74,21 @@ export function VrpJsonEditor({
   const handleRequestChange = (value: Record<string, unknown>) => {
     onChange(value)
     validateData(value)
+  }
+
+  const handleMonacoChange = (value: string | undefined) => {
+    if (value === undefined) return
+    
+    setJsonString(value)
+    
+    try {
+      const parsed = JSON.parse(value)
+      setParseError(null)
+      handleRequestChange(parsed)
+    } catch (error) {
+      setParseError(error instanceof Error ? error.message : 'Invalid JSON')
+      // Don't update the parent data when JSON is invalid
+    }
   }
 
   const handleJsonViewChange = (edit: unknown) => {
@@ -87,6 +114,9 @@ export function VrpJsonEditor({
     if (onSampleChange) {
       onSampleChange(sampleType)
       const newData = getSampleVrpData(sampleType)
+      const newJsonString = JSON.stringify(newData, null, 2)
+      setJsonString(newJsonString)
+      setParseError(null)
       onChange(newData as unknown as Record<string, unknown>)
       validateData(newData as unknown as Record<string, unknown>)
     }
@@ -98,7 +128,16 @@ export function VrpJsonEditor({
       return (
         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Validating...</span>
+          <span data-testid="editor-loading">Validating...</span>
+        </div>
+      )
+    }
+
+    if (parseError) {
+      return (
+        <div className="flex items-center space-x-2 text-sm">
+          <XCircle className="h-4 w-4 text-red-600" />
+          <span data-testid="validation-status" className="text-red-600">Parse Error</span>
         </div>
       )
     }
@@ -121,20 +160,35 @@ export function VrpJsonEditor({
   }
 
   const renderValidationErrors = () => {
-    if (validationResult.valid || validationResult.errors.length === 0) {
+    const hasParseError = parseError !== null
+    const hasValidationErrors = !validationResult.valid && validationResult.errors.length > 0
+    
+    if (!hasParseError && !hasValidationErrors) {
       return null
     }
 
     return (
       <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
-        <h4 className="text-sm font-medium text-red-800 mb-2">Validation Errors:</h4>
-        <ul className="text-xs text-red-700 space-y-1">
-          {validationResult.errors.map((error, index) => (
-            <li key={index} className="font-mono">
-              {error}
-            </li>
-          ))}
-        </ul>
+        {hasParseError && (
+          <>
+            <h4 className="text-sm font-medium text-red-800 mb-2">JSON Parse Error:</h4>
+            <div className="text-xs text-red-700 font-mono mb-3">
+              {parseError}
+            </div>
+          </>
+        )}
+        {hasValidationErrors && (
+          <>
+            <h4 className="text-sm font-medium text-red-800 mb-2">Validation Errors:</h4>
+            <ul className="text-xs text-red-700 space-y-1">
+              {validationResult.errors.map((error, index) => (
+                <li key={index} className="font-mono">
+                  {error}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
     )
   }
@@ -267,7 +321,7 @@ export function VrpJsonEditor({
             {/* Right side: Send Button */}
             <Button
               onClick={onSend}
-              disabled={disabled || isLoading}
+              disabled={disabled || isLoading || parseError !== null}
               size="sm"
               className="min-w-[80px]"
             >
@@ -317,41 +371,40 @@ export function VrpJsonEditor({
           {renderValidationStatus()}
         </div>
         
-        <div 
-          className="flex-1 overflow-auto p-4"
-          onKeyDown={(e) => {
-            // Ctrl+V or Cmd+V to paste
-            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-              e.preventDefault()
-              navigator.clipboard.readText().then(text => {
-                try {
-                  const parsed = JSON.parse(text)
-                  onChange(parsed)
-                  validateData(parsed)
-                } catch (error) {
-                  // Ignore invalid JSON pastes
-                  console.warn('Invalid JSON pasted:', error)
-                }
-              }).catch(() => {
-                // Ignore clipboard errors
-              })
-            }
-          }}
-          tabIndex={0}
-        >
-          <JsonView
-            value={requestData}
-            onChange={handleJsonViewChange}
-            style={{
-              backgroundColor: 'transparent',
-              fontSize: '12px',
-              fontFamily: 'ui-monospace, SFMono-Regular, Monaco, Cascadia Code, Roboto Mono, Consolas, Liberation Mono, Menlo, monospace'
-            }}
-            displayDataTypes={false}
-            displayObjectSize={false}
-            collapsed={2}
-            enableClipboard={true}
-          />
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 min-h-0" data-testid="json-editor">
+            <Editor
+              height="100%"
+              defaultLanguage="json"
+              value={jsonString}
+              onChange={handleMonacoChange}
+              options={{
+                automaticLayout: true,
+                fontSize: 12,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                lineNumbers: 'on',
+                folding: true,
+                bracketPairColorization: { enabled: true },
+                formatOnPaste: true,
+                formatOnType: true,
+                tabSize: 2,
+                insertSpaces: true,
+                renderWhitespace: 'boundary',
+                quickSuggestions: true,
+                contextmenu: true,
+                selectOnLineNumbers: true,
+                roundedSelection: false,
+                readOnly: disabled,
+                cursorStyle: 'line',
+                mouseWheelZoom: true,
+                showUnused: true,
+                showDeprecated: true
+              }}
+              theme="vs"
+            />
+          </div>
           
           {renderValidationErrors()}
         </div>
@@ -368,7 +421,7 @@ export function VrpJsonEditor({
             </div>
           </div>
           
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-auto p-4" data-testid="json-editor">
             <JsonView
               value={responseData}
               style={{
