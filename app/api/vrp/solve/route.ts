@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { SolviceVrpSolver } from 'solvice-vrp-solver'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
+import { rateLimiters, createRateLimitHeaders } from '@/lib/rate-limiter'
 
 export async function POST(request: NextRequest) {
   try {
+    // Apply rate limiting - 30 requests per 10 minutes
+    const rateLimitResult = rateLimiters.vrp(request)
+    
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { 
+          error: 'Rate limit exceeded. Please wait before making more requests.',
+          type: 'rate_limit',
+          resetTime: rateLimitResult.resetTime
+        },
+        { 
+          status: 429,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
+      )
+    }
     // Get API key from request headers or server-side environment
     const authHeader = request.headers.get('authorization')
     const apiKey = authHeader?.replace('Bearer ', '') || process.env.SOLVICE_API_KEY
@@ -29,7 +46,9 @@ export async function POST(request: NextRequest) {
     // Make the VRP solve request
     const response = await client.vrp.syncSolve(requestData)
 
-    return NextResponse.json(response)
+    return NextResponse.json(response, {
+      headers: createRateLimitHeaders(rateLimitResult)
+    })
 
   } catch (error: unknown) {
     console.error('VRP API Error:', error)

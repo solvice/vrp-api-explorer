@@ -3,9 +3,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import maplibregl from 'maplibre-gl'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
-import { Loader2, Truck } from 'lucide-react'
+import { Loader2, Truck, Layers3, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { decodePolyline, isEncodedPolyline } from '@/lib/polyline-decoder'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 interface VrpMapProps {
@@ -26,25 +29,62 @@ const ROUTE_COLORS = [
   '#84CC16'  // lime
 ]
 
+// Map style configurations
+const MAP_STYLES = [
+  { id: 'white', name: 'White', url: 'https://cdn.solvice.io/styles/white.json', preview: '#ffffff' },
+  { id: 'light', name: 'Light', url: 'https://cdn.solvice.io/styles/light.json', preview: '#f8fafc' },
+  { id: 'gray', name: 'Gray', url: 'https://cdn.solvice.io/styles/grayscale.json', preview: '#9ca3af' },
+  { id: 'dark', name: 'Dark', url: 'https://cdn.solvice.io/styles/dark.json', preview: '#374151' },
+  { id: 'black', name: 'Black', url: 'https://cdn.solvice.io/styles/black.json', preview: '#111827' }
+] as const
+
+type MapStyleId = typeof MAP_STYLES[number]['id']
+
+// Retrieve saved style from localStorage or default to white
+const getSavedMapStyle = (): MapStyleId => {
+  if (typeof window === 'undefined') return 'white'
+  try {
+    const saved = localStorage.getItem('vrp-map-style') as MapStyleId
+    return MAP_STYLES.find(s => s.id === saved) ? saved : 'white'
+  } catch {
+    return 'white'
+  }
+}
+
+// Save map style to localStorage
+const saveMapStyle = (styleId: MapStyleId) => {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem('vrp-map-style', styleId)
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
 export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const markers = useRef<maplibregl.Marker[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [currentStyle, setCurrentStyle] = useState<MapStyleId>(getSavedMapStyle)
+  const [isStyleChanging, setIsStyleChanging] = useState(false)
+  const [isStyleSwitcherOpen, setIsStyleSwitcherOpen] = useState(false)
 
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return
 
+    const selectedStyle = MAP_STYLES.find(s => s.id === currentStyle) || MAP_STYLES[0]
+    
     map.current = new maplibregl.Map({
       container: mapContainer.current,
-      style: 'https://cdn.solvice.io/styles/white.json',
+      style: selectedStyle.url,
       center: [3.7250, 51.0538], // Ghent center
       zoom: 11
     })
 
-    // Add navigation controls
-    map.current.addControl(new maplibregl.NavigationControl(), 'top-right')
+    // Add navigation controls with both zoom and compass disabled
+    map.current.addControl(new maplibregl.NavigationControl({ showZoom: false, showCompass: false }), 'top-right')
 
     // Handle loading state
     map.current.on('load', () => {
@@ -63,13 +103,243 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
         map.current = null
       }
     }
-  }, [])
+  }, [currentStyle])
 
   // Clear existing markers
   const clearMarkers = () => {
     markers.current.forEach(marker => marker.remove())
     markers.current = []
   }
+
+  // Switch map style
+  const switchMapStyle = useCallback((styleId: MapStyleId) => {
+    if (!map.current || isStyleChanging || styleId === currentStyle) return
+    
+    const newStyle = MAP_STYLES.find(s => s.id === styleId)
+    if (!newStyle) return
+
+    setIsStyleChanging(true)
+    setCurrentStyle(styleId)
+    saveMapStyle(styleId)
+    setIsStyleSwitcherOpen(false)
+
+    // Store current map state
+    const currentCenter = map.current.getCenter()
+    const currentZoom = map.current.getZoom()
+    const currentBearing = map.current.getBearing()
+    const currentPitch = map.current.getPitch()
+
+    // Set new style
+    map.current.setStyle(newStyle.url)
+
+    // Handle style load completion
+    const handleStyleLoad = () => {
+      if (!map.current) return
+      
+      // Restore map state
+      map.current.jumpTo({
+        center: currentCenter,
+        zoom: currentZoom,
+        bearing: currentBearing,
+        pitch: currentPitch
+      })
+
+      setIsStyleChanging(false)
+      
+      // Re-apply routes and markers after style loads
+      setTimeout(() => {
+        if (!map.current) return
+        
+        if (responseData) {
+          // Re-apply solution data (routes + numbered markers)
+          clearMarkers()
+          
+          // Add resource markers (depots)
+          const resources = requestData.resources as Array<{ name?: string; shifts?: Array<{ start?: { longitude: number; latitude: number } }> }> | undefined
+          resources?.forEach((resource) => {
+            resource.shifts?.forEach((shift) => {
+              if (shift.start) {
+                const el = createMarkerElement('resource', resource.name || 'Resource')
+                const marker = new maplibregl.Marker({ element: el })
+                  .setLngLat([shift.start.longitude, shift.start.latitude])
+                  .addTo(map.current!)
+                markers.current.push(marker)
+              }
+            })
+          })
+
+          // Add job markers with sequence numbers and vehicle colors
+          responseData.trips?.forEach((trip, tripIndex) => {
+            const vehicleColor = ROUTE_COLORS[tripIndex % ROUTE_COLORS.length]
+            
+            trip.visits?.forEach((visit, visitIndex) => {
+              const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
+              const job = jobs?.find((j) => j.name === visit.job)
+              if (job?.location && typeof job.location === 'object' && job.location !== null) {
+                const location = job.location as { longitude?: number; latitude?: number }
+                if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+                  const el = createMarkerElement('job', typeof job.name === 'string' ? job.name : 'Job', visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor)
+                  const marker = new maplibregl.Marker({ element: el })
+                    .setLngLat([location.longitude, location.latitude])
+                    .addTo(map.current!)
+                  markers.current.push(marker)
+                }
+              }
+            })
+          })
+          
+          // Re-apply route visualization 
+          clearRoutes()
+          responseData.trips?.forEach((trip, tripIndex) => {
+            const color = ROUTE_COLORS[tripIndex % ROUTE_COLORS.length]
+            const routeId = `route-${tripIndex}`
+            const lineId = `line-${tripIndex}`
+            const shadowId = `shadow-${tripIndex}`
+
+            // Create route geometry (simplified version)
+            let routeGeometry: GeoJSON.LineString | null = null
+            
+            if (trip.polyline && typeof trip.polyline === 'string') {
+              try {
+                if (isEncodedPolyline(trip.polyline)) {
+                  const coordinates = decodePolyline(trip.polyline)
+                  if (coordinates.length > 0) {
+                    routeGeometry = {
+                      type: 'LineString',
+                      coordinates
+                    }
+                  }
+                }
+              } catch (error) {
+                console.warn(`Failed to decode polyline for trip ${tripIndex}:`, error)
+              }
+            }
+            
+            if (!routeGeometry) {
+              // Fallback: create route coordinates from visits
+              const coordinates: [number, number][] = []
+              
+              const resources = requestData.resources as Array<Record<string, unknown>> | undefined
+              const resource = resources?.find((r) => r.name === trip.resource)
+              const shifts = resource?.shifts as Array<Record<string, unknown>> | undefined
+              const startLocation = shifts?.[0]?.start
+              
+              if (startLocation && typeof startLocation === 'object' && startLocation !== null) {
+                const location = startLocation as { longitude?: number; latitude?: number }
+                if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+                  coordinates.push([location.longitude, location.latitude])
+                }
+              }
+              
+              trip.visits?.forEach((visit) => {
+                const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
+                const job = jobs?.find((j) => j.name === visit.job)
+                if (job?.location && typeof job.location === 'object' && job.location !== null) {
+                  const location = job.location as { longitude?: number; latitude?: number }
+                  if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+                    coordinates.push([location.longitude, location.latitude])
+                  }
+                }
+              })
+
+              const endLocation = shifts?.[0]?.end || startLocation
+              if (endLocation && typeof endLocation === 'object' && endLocation !== null && coordinates.length > 1) {
+                const location = endLocation as { longitude?: number; latitude?: number }
+                if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+                  coordinates.push([location.longitude, location.latitude])
+                }
+              }
+              
+              if (coordinates.length > 1) {
+                routeGeometry = {
+                  type: 'LineString',
+                  coordinates
+                }
+              }
+            }
+
+            if (routeGeometry && map.current?.isStyleLoaded()) {
+              // Add route source
+              map.current.addSource(routeId, {
+                type: 'geojson',
+                data: {
+                  type: 'Feature',
+                  properties: {
+                    resourceName: trip.resource,
+                    tripIndex,
+                    visitCount: trip.visits?.length || 0
+                  },
+                  geometry: routeGeometry
+                }
+              })
+
+              // Add route layers
+              map.current.addLayer({
+                id: shadowId,
+                type: 'line',
+                source: routeId,
+                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                paint: { 'line-color': '#000000', 'line-width': 6, 'line-opacity': 0.2 }
+              })
+
+              map.current.addLayer({
+                id: lineId,
+                type: 'line',
+                source: routeId,
+                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                paint: { 'line-color': color, 'line-width': 4, 'line-opacity': 0.9 }
+              })
+            }
+          })
+        } else if (requestData) {
+          // Re-apply request data (markers only)
+          clearMarkers()
+          
+          const bounds = new maplibregl.LngLatBounds()
+
+          // Add resource markers
+          const resources = requestData.resources as Array<Record<string, unknown>> | undefined
+          resources?.forEach((resource) => {
+            const shifts = resource.shifts as Array<Record<string, unknown>> | undefined
+            shifts?.forEach((shift) => {
+              if (shift.start && typeof shift.start === 'object' && shift.start !== null) {
+                const location = shift.start as { longitude?: number; latitude?: number }
+                if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+                  const el = createMarkerElement('resource', typeof resource.name === 'string' ? resource.name : 'Resource')
+                  const marker = new maplibregl.Marker({ element: el })
+                    .setLngLat([location.longitude, location.latitude])
+                    .addTo(map.current!)
+                  markers.current.push(marker)
+                  bounds.extend([location.longitude, location.latitude])
+                }
+              }
+            })
+          })
+
+          // Add job markers
+          const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
+          jobs?.forEach((job) => {
+            if (job.location && typeof job.location === 'object' && job.location !== null) {
+              const location = job.location as { longitude?: number; latitude?: number }
+              if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
+                const el = createMarkerElement('job', typeof job.name === 'string' ? job.name : 'Job')
+                const marker = new maplibregl.Marker({ element: el })
+                  .setLngLat([location.longitude, location.latitude])
+                  .addTo(map.current!)
+                markers.current.push(marker)
+                bounds.extend([location.longitude, location.latitude])
+              }
+            }
+          })
+        }
+      }, 100) // Small delay to ensure style is fully loaded
+      
+      // Remove event listener
+      map.current.off('styledata', handleStyleLoad)
+    }
+
+    map.current.on('styledata', handleStyleLoad)
+  }, [currentStyle, isStyleChanging, requestData, responseData])
 
   // Create marker element with custom styling and hover interactions
   const createMarkerElement = (
@@ -514,6 +784,73 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
     )
   }
 
+  // Create style switcher component
+  const StyleSwitcher = () => {
+    const currentStyleObj = MAP_STYLES.find(s => s.id === currentStyle) || MAP_STYLES[0]
+    
+    return (
+      <div className="absolute top-4 right-4 z-10">
+        <Popover open={isStyleSwitcherOpen} onOpenChange={setIsStyleSwitcherOpen}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-3 bg-white border shadow-lg hover:bg-gray-50"
+                  disabled={isStyleChanging}
+                >
+                  <div className="flex items-center space-x-2">
+                    <Layers3 className="h-3 w-3" />
+                    <div 
+                      className="w-4 h-4 rounded border border-gray-300"
+                      style={{ backgroundColor: currentStyleObj.preview }}
+                    />
+                    {isStyleChanging ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3" />
+                    )}
+                  </div>
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Map Style</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <PopoverContent className="w-56 p-2" align="end">
+            <div className="space-y-1">
+              <div className="px-2 py-1 text-xs font-medium text-gray-600">Map Styles</div>
+              {MAP_STYLES.map((style) => (
+                <Button
+                  key={style.id}
+                  variant={currentStyle === style.id ? "secondary" : "ghost"}
+                  size="sm"
+                  className="w-full justify-start h-8 px-2"
+                  onClick={() => switchMapStyle(style.id)}
+                  disabled={isStyleChanging}
+                >
+                  <div className="flex items-center space-x-2">
+                    <div 
+                      className="w-4 h-4 rounded border border-gray-300 flex-shrink-0"
+                      style={{ backgroundColor: style.preview }}
+                    />
+                    <span className="text-xs">{style.name}</span>
+                    {currentStyle === style.id && (
+                      <div className="ml-auto w-1.5 h-1.5 bg-blue-600 rounded-full" />
+                    )}
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    )
+  }
+
   // Update map when data changes
   useEffect(() => {
     if (!map.current || isLoading) return
@@ -549,6 +886,9 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
       
       {/* Route Legend */}
       <RouteLegend />
+      
+      {/* Style Switcher */}
+      <StyleSwitcher />
       
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm">

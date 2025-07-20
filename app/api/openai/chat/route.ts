@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { rateLimiters, createRateLimitHeaders } from '@/lib/rate-limiter'
 
 export async function POST(request: NextRequest) {
   try {
+    // Apply rate limiting - 10 requests per 10 minutes
+    const rateLimitResult = rateLimiters.openai(request)
+    
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { 
+          error: 'Rate limit exceeded. Please wait before making more requests.',
+          type: 'rate_limit',
+          resetTime: rateLimitResult.resetTime
+        },
+        { 
+          status: 429,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
+      )
+    }
     // Get API key from server-side environment variable only
     const apiKey = process.env.OPENAI_API_KEY
 
@@ -50,6 +67,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       content,
       usage: completion.usage
+    }, {
+      headers: createRateLimitHeaders(rateLimitResult)
     })
 
   } catch (error: unknown) {

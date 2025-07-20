@@ -6,7 +6,7 @@ import { Editor } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { validateVrpRequest, ValidationResult } from '@/lib/vrp-schema'
-import { CheckCircle, XCircle, Loader2, Play, Settings } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, Play, Settings, ExternalLink } from 'lucide-react'
 import { VrpAssistantProvider, useVrpAssistant } from '@/components/VrpAssistant/VrpAssistantContext'
 import { VrpAssistantButton } from '@/components/VrpAssistant/VrpAssistantButton'
 import { VrpAssistantPane } from '@/components/VrpAssistant/VrpAssistantPane'
@@ -391,6 +391,24 @@ function VrpJsonEditorContent({
                   POST /v2/vrp/solve/sync
                 </code>
               </div>
+
+              {/* Documentation Link Button */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => window.open('https://docs2.solvice.io', '_blank')}
+                    aria-label="Open Documentation"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>API Documentation</p>
+                </TooltipContent>
+              </Tooltip>
 
               {/* API Key Settings Button with Tooltip */}
               {apiKeyStatus && (
