@@ -63,7 +63,14 @@ export function VrpExplorer() {
       
       toast.dismiss(toastId)
       toast.success('VRP problem solved successfully!')
-      
+
+      console.log('🚀 VRP API Response received:', result)
+      console.log('🚀 Response trips:', result.trips)
+      if (result.trips?.[0]) {
+        console.log('🚀 First trip:', result.trips[0])
+        console.log('🚀 First trip polyline:', result.trips[0].polyline)
+      }
+
       setResponseData(result)
     } catch (error) {
       toast.dismiss()

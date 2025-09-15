@@ -199,20 +199,33 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
             // Create route geometry (simplified version)
             let routeGeometry: GeoJSON.LineString | null = null
             
+            console.log(`🗺️ VrpMap: Checking polyline for trip ${tripIndex}:`, {
+              hasPolyline: !!trip.polyline,
+              polylineType: typeof trip.polyline,
+              polylineLength: trip.polyline?.length,
+              polylinePreview: trip.polyline?.substring(0, 20)
+            })
+
             if (trip.polyline && typeof trip.polyline === 'string') {
               try {
                 if (isEncodedPolyline(trip.polyline)) {
+                  console.log(`🗺️ VrpMap: Decoding polyline for trip ${tripIndex}`)
                   const coordinates = decodePolyline(trip.polyline)
                   if (coordinates.length > 0) {
+                    console.log(`✅ VrpMap: Successfully decoded ${coordinates.length} coordinates from polyline`)
                     routeGeometry = {
                       type: 'LineString',
                       coordinates
                     }
                   }
+                } else {
+                  console.log(`❌ VrpMap: Polyline failed validation for trip ${tripIndex}`)
                 }
               } catch (error) {
                 console.warn(`Failed to decode polyline for trip ${tripIndex}:`, error)
               }
+            } else {
+              console.log(`❌ VrpMap: No valid polyline found for trip ${tripIndex}`)
             }
             
             if (!routeGeometry) {
