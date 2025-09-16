@@ -69,6 +69,12 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
   const [currentStyle, setCurrentStyle] = useState<MapStyleId>(getSavedMapStyle)
   const [isStyleChanging, setIsStyleChanging] = useState(false)
   const [isStyleSwitcherOpen, setIsStyleSwitcherOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // Prevent hydration mismatch by only rendering style-dependent UI after mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Initialize map
   useEffect(() => {
@@ -800,7 +806,7 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
   // Create style switcher component
   const StyleSwitcher = () => {
     const currentStyleObj = MAP_STYLES.find(s => s.id === currentStyle) || MAP_STYLES[0]
-    
+
     return (
       <div className="absolute top-4 right-4 z-10">
         <Popover open={isStyleSwitcherOpen} onOpenChange={setIsStyleSwitcherOpen}>
@@ -815,9 +821,9 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
                 >
                   <div className="flex items-center space-x-2">
                     <Layers3 className="h-3 w-3" />
-                    <div 
+                    <div
                       className="w-4 h-4 rounded border border-gray-300"
-                      style={{ backgroundColor: currentStyleObj.preview }}
+                      style={mounted ? { backgroundColor: currentStyleObj.preview } : {}}
                     />
                     {isStyleChanging ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -846,9 +852,9 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
                   disabled={isStyleChanging}
                 >
                   <div className="flex items-center space-x-2">
-                    <div 
+                    <div
                       className="w-4 h-4 rounded border border-gray-300 flex-shrink-0"
-                      style={{ backgroundColor: style.preview }}
+                      style={mounted ? { backgroundColor: style.preview } : {}}
                     />
                     <span className="text-xs">{style.name}</span>
                     {currentStyle === style.id && (
