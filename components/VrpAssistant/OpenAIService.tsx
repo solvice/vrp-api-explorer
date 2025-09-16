@@ -18,6 +18,13 @@ export interface VrpModificationResponse {
   }>;
 }
 
+export interface CsvToVrpResponse {
+  vrpData: Vrp.VrpSyncSolveParams;
+  explanation: string;
+  conversionNotes: string[];
+  rowsProcessed: number;
+}
+
 export class OpenAIService {
   constructor() {
     // No longer need API key on client-side
@@ -335,6 +342,130 @@ Return exactly 3-5 suggestions as a JSON array of strings.`;
       // Fallback suggestions based on data analysis
       return this.generateFallbackSuggestions(vrpData);
     }
+  }
+
+  /**
+   * Convert CSV data to VRP format using OpenAI function calling
+   */
+  async convertCsvToVrp(csvContent: string, filename: string): Promise<CsvToVrpResponse> {
+    try {
+      return await ErrorHandlingService.withRetry(async () => {
+        const systemPrompt = this.buildCsvConversionSystemPrompt();
+        const userMessage = `Convert this CSV file to VRP JSON format:\n\nFilename: ${filename}\n\nCSV Content:\n${csvContent}`;
+
+        // Use function calling for structured output
+        const response = await fetch('/api/openai/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userMessage }
+            ],
+            model: "gpt-4o",
+            max_tokens: 4000,
+            temperature: 0.1,
+            response_format: { type: "json_object" }
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const content = data.content;
+
+        if (!content) {
+          throw new Error("Invalid response format from OpenAI API - no content");
+        }
+
+        const parsed = JSON.parse(content) as CsvToVrpResponse;
+
+        // Validate the generated VRP data
+        const validation = VrpSchemaService.validateModification(
+          // Use a minimal VRP structure for comparison
+          { jobs: [], resources: [] } as Vrp.VrpSyncSolveParams,
+          parsed.vrpData,
+        );
+
+        if (!validation.valid) {
+          throw new Error(
+            `Generated VRP data is invalid: ${validation.errors.join(", ")}`,
+          );
+        }
+
+        return parsed;
+      }, {
+        maxRetries: 2,
+        baseDelay: 1000,
+        maxDelay: 10000
+      });
+    } catch (error: unknown) {
+      console.error('🚨 CSV conversion error:', error);
+      const vrpError = ErrorHandlingService.classifyError(error);
+      ErrorHandlingService.logError(vrpError, {
+        operation: 'convertCsvToVrp',
+        filename,
+        csvLength: csvContent.length
+      });
+      throw vrpError;
+    }
+  }
+
+  /**
+   * Build system prompt for CSV to VRP conversion
+   */
+  private buildCsvConversionSystemPrompt(): string {
+    return `You are a VRP (Vehicle Routing Problem) data converter. Convert CSV data to valid VRP JSON format.
+
+${VrpSchemaService.getSchemaForAI()}
+
+## Conversion Instructions:
+1. Analyze CSV columns to identify:
+   - Location data (lat/lon coordinates, addresses)
+   - Service times/durations
+   - Time windows
+   - Demands/quantities
+   - Vehicle information
+
+2. Map CSV data to VRP structure:
+   - Each CSV row (except header) becomes a job in the jobs array
+   - Create reasonable vehicle resources based on job count
+   - Use intelligent field mapping (lat/latitude → location.latitude, etc.)
+   - Convert time formats to ISO datetime (YYYY-MM-DDTHH:mm:ssZ)
+   - Convert durations to seconds
+
+3. Generate defaults for missing data:
+   - Single vehicle starting from depot (first job location or center)
+   - 8-hour work shift (08:00-18:00) if no times specified
+   - 15-minute default service duration if not provided
+   - Enable polylines and partial planning options
+
+4. Ensure data quality:
+   - Job names must be unique (add suffixes if needed)
+   - All coordinates must be valid numbers
+   - All datetime values must use proper ISO format
+   - Resource shifts must have start/end locations
+
+## Required JSON Response Format:
+{
+  "vrpData": { /* complete VRP request object */ },
+  "explanation": "Brief explanation of the conversion",
+  "conversionNotes": ["Note about assumption 1", "Note about assumption 2"],
+  "rowsProcessed": number
+}
+
+## Rules:
+- RESPOND ONLY WITH VALID JSON - no additional text
+- Use conservative defaults for missing data
+- Preserve all location data with proper lat/lon coordinates
+- Generate descriptive job names if CSV names are poor
+- Ensure generated VRP passes validation
+- Include helpful notes about assumptions made during conversion`;
   }
 
   /**

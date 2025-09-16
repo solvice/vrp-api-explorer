@@ -10,17 +10,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface VrpLayoutProps {
   leftPanel: ReactNode
+  centerPanel: ReactNode
   rightPanel: ReactNode
   leftPanelSize?: number
+  rightPanelSize?: number
 }
 
-export function VrpLayout({ 
-  leftPanel, 
-  rightPanel, 
-  leftPanelSize = 40 
+export function VrpLayout({
+  leftPanel,
+  centerPanel,
+  rightPanel,
+  leftPanelSize = 35,
+  rightPanelSize = 25
 }: VrpLayoutProps) {
   const [isMobile, setIsMobile] = useState(false)
-  const rightPanelSize = 100 - leftPanelSize
+  const centerPanelSize = 100 - leftPanelSize - rightPanelSize
 
   useEffect(() => {
     const checkIsMobile = () => {
@@ -43,22 +47,31 @@ export function VrpLayout({
     return (
       <div className="flex flex-col h-screen bg-background">
         <Tabs defaultValue="editor" className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="editor" className="text-sm">
               JSON Editor
             </TabsTrigger>
             <TabsTrigger value="map" className="text-sm">
               Map
             </TabsTrigger>
+            <TabsTrigger value="chat" className="text-sm">
+              AI Chat
+            </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="editor" className="flex-1 mt-0 border-0 p-0">
             <div className="h-full">
               {leftPanel}
             </div>
           </TabsContent>
-          
+
           <TabsContent value="map" className="flex-1 mt-0 border-0 p-0">
+            <div className="h-full">
+              {centerPanel}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="chat" className="flex-1 mt-0 border-0 p-0">
             <div className="h-full">
               {rightPanel}
             </div>
@@ -74,22 +87,34 @@ export function VrpLayout({
         direction="horizontal"
         className="flex-1"
       >
-        <ResizablePanel 
+        <ResizablePanel
           defaultSize={leftPanelSize}
           minSize={25}
-          maxSize={75}
+          maxSize={50}
         >
           <div className="h-full border-r">
             {leftPanel}
           </div>
         </ResizablePanel>
-        
+
         <ResizableHandle withHandle />
-        
-        <ResizablePanel 
+
+        <ResizablePanel
+          defaultSize={centerPanelSize}
+          minSize={30}
+          maxSize={50}
+        >
+          <div className="h-full border-r">
+            {centerPanel}
+          </div>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel
           defaultSize={rightPanelSize}
-          minSize={25}
-          maxSize={75}
+          minSize={20}
+          maxSize={40}
         >
           <div className="h-full">
             {rightPanel}

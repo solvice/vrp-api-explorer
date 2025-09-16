@@ -44,16 +44,17 @@ describe('Polyline Decoder', () => {
   describe('isEncodedPolyline', () => {
     it('should identify valid polyline strings', () => {
       expect(isEncodedPolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@')).toBe(true)
-      expect(isEncodedPolyline('abcDEF123_@?`~|\\-')).toBe(true)
+      expect(isEncodedPolyline('abcDEF123_@?`~|-')).toBe(true)
       expect(isEncodedPolyline('simple123')).toBe(true)
+      expect(isEncodedPolyline('{|}~`@?')).toBe(true) // curly braces and other valid chars
     })
 
     it('should reject invalid polyline strings', () => {
       expect(isEncodedPolyline('')).toBe(false)
-      expect(isEncodedPolyline('hello world!')).toBe(false)
-      expect(isEncodedPolyline('invalid{chars}')).toBe(false) // curly braces not allowed
+      expect(isEncodedPolyline('hello world!')).toBe(false) // space not allowed
       expect(isEncodedPolyline('spaces not allowed')).toBe(false)
-      expect(isEncodedPolyline('invalid[chars]')).toBe(false) // square brackets not allowed
+      expect(isEncodedPolyline('invalid\ttab')).toBe(false) // tab not allowed
+      expect(isEncodedPolyline('invalid\nnewline')).toBe(false) // newline not allowed
     })
 
     it('should handle non-string input', () => {

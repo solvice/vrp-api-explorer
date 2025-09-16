@@ -1,138 +1,354 @@
-# VRP Assistant Feature Specification
+# CSV to VRP JSON Import Feature Specification
 
 ## Overview
-The VRP Assistant is an AI-powered chatbot feature that allows users to modify VRP JSON requests using natural language commands. Users can request changes like "add time windows on the job" or "add another resource" and the AI will intelligently modify the JSON while ensuring schema validation.
 
-## Core Functionality
+Add the ability to import CSV files and automatically convert them to valid VRP JSON format using OpenAI's code interpreter. The feature will integrate with the existing VRP Assistant chat interface, providing an intelligent, flexible conversion system that can handle arbitrary CSV structures.
 
-### AI Integration
-- **API Provider**: OpenAI API
-- **Context**: Include VRP JSON schema definition for structure understanding
-- **Validation**: All AI-generated JSON must pass VRP schema validation
-- **Error Handling**: Transparent retry with user feedback on validation failures
-- **Behavior Mode**: Adaptive - starts simple, provides more detail when needed
+## Core Requirements
 
-### User Interface Design
+### Functional Requirements
+- **Single CSV Import**: Import one CSV file at a time with up to 500 rows
+- **Intelligent Conversion**: Use OpenAI to automatically map CSV columns to VRP fields
+- **Schema Compliance**: Generate valid VRP JSON that matches the existing Solvice VRP schema
+- **Automatic Loading**: Converted VRP JSON replaces existing data in the JSON editor
+- **Error Handling**: Graceful failure handling with user-friendly error messages
 
-#### AI Button
-- **Location**: Floating button in top-right corner of JSON editor pane
-- **Design**: Small rectangular button with AI icon
-- **States**:
-  - Default: Static AI icon
-  - Processing: Loading spinner
-  - Active: Pressed/active state when chatbot pane is open
-- **Interaction**: Click to toggle chatbot pane open/closed
+### Technical Constraints
+- **File Size Limit**: 500 rows maximum per CSV file
+- **Coordinate Requirement**: CSV must contain latitude and longitude columns
+- **No Geocoding**: Addresses will not be converted to coordinates (future enhancement)
+- **Replace Behavior**: New imports replace existing VRP data entirely
 
-#### Chatbot Pane
-- **Layout**: Appears below the request JSON pane using shadcn resizable components
-- **Initial Height**: 50% of available space
-- **Resizable**: Users can drag to adjust height between JSON editor and chatbot
-- **Component Base**: https://shadcn-chatbot-kit.vercel.app/
+## Integration Architecture
 
-### Initial Chatbot Behavior
-When the chatbot pane opens, it should:
-1. Analyze the current JSON structure
-2. Display 2-3 dynamic suggestions based on potential improvements (e.g., "I notice you have 16 jobs but only 1 vehicle - would you like me to add more vehicles?")
-3. Show 1-2 generic examples for fallback
-4. Wait for user input
+### VRP Assistant Integration
+The CSV import will be fully integrated into the existing VRP Assistant (`components/VrpAssistant/`):
 
-### Change Management
+- **File Upload UI**: Paperclip icon next to the chat input field
+- **OpenAI Processing**: Leverage existing OpenAI service for conversion
+- **Chat Interface**: Show brief conversion status messages
+- **Error Handling**: Use existing error handling service
 
-#### JSON Modification Flow
-1. User submits natural language request
-2. AI processes request with current JSON + VRP schema context
-3. AI generates modified JSON
-4. System validates against VRP schema
-5. If valid: Apply changes with highlighting
-6. If invalid: Show transparent retry message and attempt again
-7. After max retries: Show error and ask for clarification
+### Component Modifications
 
-#### Change Highlighting
-- **Behavior**: Smart highlights that disappear when user starts typing in highlighted area but persist elsewhere
-- **Color Scheme**:
-  - Green background: Additions
-  - Yellow background: Modifications  
-  - Red background: Deletions
-- **Persistence**: Keep chatbot pane open for further modifications
+#### 1. Chat Interface (`ShadcnChatInterface.tsx`)
+```typescript
+// Add paperclip button to input area (similar to shadcn/ui chatbot pattern)
+<PromptInputButton onClick={handleFileUpload} disabled={isTyping}>
+  <PaperclipIcon size={16} />
+</PromptInputButton>
+```
 
-### Data Persistence
-- **Chat History**: Stored in browser's local storage
-- **Persistence**: Survives page reloads
-- **Management**: "Clear Chat" button available in chatbot interface
+#### 2. OpenAI Service (`OpenAIService.tsx`)
+```typescript
+// New function for CSV conversion
+export async function convertCsvToVrp(csvContent: string, filename: string): Promise<VrpRequest>
+```
 
-## Technical Implementation
+#### 3. File Upload Handler
+```typescript
+// Handle file selection and validation
+const handleFileUpload = () => {
+  // Trigger file input
+  // Validate file size/rows
+  // Read CSV content
+  // Call OpenAI conversion
+  // Update JSON editor
+};
+```
 
-### State Management
-- Chatbot pane open/closed state
-- AI processing state (loading indicators)
-- Change highlighting state
-- Chat conversation history
+## OpenAI Integration
 
-### API Integration
-- OpenAI API calls with VRP schema context
-- Error handling for API failures
-- Token management and cost optimization
+### Function Calling Approach
+Use OpenAI's function calling feature to ensure structured JSON output:
 
-### Validation Pipeline
-- Real-time schema validation of AI-generated JSON
-- Integration with existing VRP validation system
-- Error message translation for user feedback
+```typescript
+const functions = [{
+  name: "convert_csv_to_vrp",
+  description: "Convert CSV data to VRP JSON format",
+  parameters: {
+    type: "object",
+    properties: {
+      vrp_request: {
+        type: "object",
+        description: "Complete VRP request object following Solvice schema"
+      }
+    },
+    required: ["vrp_request"]
+  }
+}];
+```
 
-### Monaco Editor Integration
-- Change highlighting with smart persistence
-- Seamless integration with existing folding/editing features
-- Highlight management (apply, clear, fade behaviors)
+### System Prompt Strategy
+```typescript
+const systemPrompt = `
+You are a VRP (Vehicle Routing Problem) data converter. Convert the provided CSV data to valid VRP JSON format.
+
+VRP Schema Context:
+${JSON.stringify(VRP_SCHEMA_EXAMPLE, null, 2)}
+
+Rules:
+1. Analyze CSV columns to identify: locations (lat/lon), demands, time windows, vehicle info
+2. Make intelligent assumptions for missing data (e.g., single vehicle, default capacity)
+3. Ensure all locations have valid latitude/longitude coordinates
+4. Generate clean VRP JSON with no metadata or comments
+5. If critical data is missing, use reasonable defaults
+
+CSV Data:
+{csv_content}
+`;
+```
 
 ## User Experience Flow
 
-### First Use
-1. User sees floating AI button in JSON editor
-2. Clicks button → chatbot pane opens with contextual suggestions
-3. User types natural language request
-4. AI modifies JSON with highlighted changes
-5. User can make additional requests or continue manual editing
-
-### Typical Session
-1. User requests modification via chat
-2. AI provides transparent feedback during processing
-3. Changes applied with visual highlighting
-4. User can immediately see what changed
-5. Conversation continues for iterative refinement
-6. Chat history persists across page reloads
+### Happy Path
+1. User clicks paperclip icon in VRP Assistant
+2. File picker opens (CSV files only)
+3. User selects CSV file (≤500 rows)
+4. System validates file and reads content
+5. OpenAI processes CSV with VRP schema context
+6. Brief success message appears: "✅ Converted filename.csv to VRP format"
+7. VRP JSON automatically loads in editor
+8. Map updates with new route visualization
 
 ### Error Scenarios
-1. Invalid JSON generated → AI shows "The generated JSON was invalid, let me try again..." and retries
-2. API failure → Clear error message with option to retry
-3. Unclear request → AI asks for clarification
-4. Schema violation → AI explains what went wrong and suggests alternatives
+- **File Too Large**: "CSV file exceeds 500 rows limit"
+- **Invalid File Type**: "Please select a CSV file"
+- **OpenAI Failure**: "Conversion failed. Please try again."
+- **Invalid VRP Output**: "Could not generate valid VRP data from this CSV"
+- **Missing Coordinates**: "CSV must contain latitude and longitude columns"
 
-## Examples of AI Interactions
+## Implementation Details
 
-### Dynamic Suggestions (based on current JSON)
-- "I notice you have 16 jobs but only 1 vehicle - would you like me to add more vehicles?"
-- "Your jobs don't have time windows - shall I add delivery time constraints?"
-- "Resource 'vehicle_north' works 10 hours straight - should I add a break?"
+### File Validation
+```typescript
+const validateCsvFile = (file: File): Promise<string> => {
+  // Check file extension (.csv)
+  // Read and parse CSV
+  // Count rows (max 500)
+  // Validate basic structure
+  // Return CSV content string
+};
+```
 
-### Generic Examples
-- "Add time windows to jobs"
-- "Add another resource with different working hours"
-- "Modify vehicle capacity or speed"
+### CSV Processing
+```typescript
+const processCsvUpload = async (file: File) => {
+  try {
+    const csvContent = await validateCsvFile(file);
+    const vrpData = await convertCsvToVrp(csvContent, file.name);
+    updateVrpEditor(vrpData);
+    showSuccessMessage(`✅ Converted ${file.name} to VRP format`);
+  } catch (error) {
+    showErrorMessage(error.message);
+  }
+};
+```
 
-### User Requests
-- "Add time windows from 9 AM to 5 PM on all delivery jobs"
-- "Create a second vehicle that works evening shifts"
-- "Resource John needs another shift tomorrow from 8 AM to 4 PM"
-- "Add capacity constraints of 1000kg to all vehicles"
+### OpenAI Conversion Service
+```typescript
+export async function convertCsvToVrp(csvContent: string, filename: string): Promise<VrpRequest> {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4",
+    messages: [
+      { role: "system", content: buildSystemPrompt() },
+      { role: "user", content: `Convert this CSV to VRP JSON:\n\n${csvContent}` }
+    ],
+    functions: VRP_CONVERSION_FUNCTIONS,
+    function_call: { name: "convert_csv_to_vrp" }
+  });
 
-## Success Metrics
-- JSON modification accuracy (valid schema compliance)
-- User adoption rate (clicks on AI button)
-- Session engagement (multiple modifications per session)
-- Error recovery rate (successful retries after validation failures)
+  const functionCall = response.choices[0].message.function_call;
+  const vrpData = JSON.parse(functionCall.arguments);
+
+  // Validate against VRP schema
+  validateVrpRequest(vrpData.vrp_request);
+
+  return vrpData.vrp_request;
+}
+```
+
+## UI Components
+
+### File Upload Button
+- **Location**: Next to chat input field in VRP Assistant
+- **Style**: Paperclip icon, disabled during AI processing
+- **Interaction**: Opens native file picker filtered to .csv files
+
+### Status Messages
+- **Success**: Brief green toast with filename
+- **Error**: Red toast with specific error message
+- **Processing**: Typing indicator while OpenAI processes
+
+### File Input Element
+```jsx
+<input
+  type="file"
+  accept=".csv"
+  style={{ display: 'none' }}
+  ref={fileInputRef}
+  onChange={handleFileChange}
+/>
+```
+
+## Data Flow
+
+```
+CSV File Upload
+    ↓
+File Validation (500 rows max)
+    ↓
+CSV Content Extraction
+    ↓
+OpenAI Function Call with VRP Schema
+    ↓
+Structured VRP JSON Response
+    ↓
+VRP Schema Validation
+    ↓
+JSON Editor Update
+    ↓
+Map Visualization Refresh
+```
 
 ## Future Enhancements
-- Full VRP documentation context if schema-only proves insufficient
-- Voice input for hands-free JSON editing
-- Preset modification templates
-- Undo/redo functionality for AI changes
-- Export chat conversations for documentation
+
+### Phase 2 Possibilities
+- **Address Geocoding**: Convert address strings to coordinates
+- **Multiple File Support**: Import separate CSVs for vehicles, customers, depots
+- **CSV Template Generator**: Export sample CSV formats
+- **Conversion Preview**: Show mapping preview before applying
+- **Batch Processing**: Handle multiple files simultaneously
+- **Custom Field Mapping**: Manual column-to-VRP field mapping UI
+
+### Phase 3 Possibilities
+- **Excel Support**: Import .xlsx files
+- **JSON Export**: Save conversion mappings
+- **CSV Validation**: Pre-upload data quality checks
+- **Integration APIs**: Connect to external data sources
+
+## Testing Requirements
+
+### Unit Tests
+- CSV file validation logic
+- OpenAI service conversion function
+- VRP schema validation
+- Error handling scenarios
+
+### Integration Tests
+- End-to-end file upload flow
+- OpenAI API integration
+- JSON editor update mechanism
+- Map visualization updates
+
+### Manual Testing Scenarios
+- Various CSV structures (different column names/orders)
+- Edge cases (empty rows, special characters, missing data)
+- Large files (approaching 500 row limit)
+- Invalid file types and oversized files
+
+## Dependencies
+
+### New Dependencies
+```json
+{
+  "csv-parser": "^3.0.0",  // For CSV parsing
+  "papaparse": "^5.4.1"    // Alternative CSV parser with better browser support
+}
+```
+
+### Existing Dependencies (Already Available)
+- OpenAI API integration
+- VRP schema validation
+- Error handling service
+- Toast notifications (Sonner)
+- Shadcn/ui components
+
+## Security Considerations
+
+- **File Size Limits**: Prevent large file uploads that could impact performance
+- **Content Validation**: Sanitize CSV content before sending to OpenAI
+- **API Key Management**: Use existing secure OpenAI key handling
+- **Client-Side Processing**: Parse CSV in browser to avoid server storage
+
+## Performance Considerations
+
+- **File Size Limit**: 500 rows prevents excessive OpenAI token usage
+- **Async Processing**: Non-blocking file reading and API calls
+- **Error Recovery**: Graceful fallbacks for API failures
+- **Memory Management**: Process CSV in chunks if needed
+
+## Success Metrics
+
+- **Conversion Accuracy**: Successfully map common CSV structures to valid VRP JSON
+- **User Experience**: Single-click import with minimal user interaction
+- **Error Handling**: Clear error messages for all failure scenarios
+- **Performance**: Fast conversion for files under the 500-row limit
+
+## Layout Restructuring Requirements
+
+### 3-Column Layout Implementation
+
+**IMPORTANT UPDATE**: Before implementing CSV import, the application layout must be restructured to use a 3-column design:
+
+- **Left Panel**: JSON Editor (existing VrpJsonEditor)
+- **Center Panel**: Map Visualization (existing VrpMap)
+- **Right Panel**: AI Assistant Chat (always visible)
+
+### Key Changes Required
+
+#### Remove CSV File Upload
+- **No CSV button**: Remove all file upload UI components from the specification
+- **Focus on layout**: Priority is restructuring the interface, not adding CSV functionality
+
+#### Always-Visible AI Assistant
+- **Remove toggle button**: VRP Assistant should always be visible in the right panel
+- **No overlay/popup**: Chat interface becomes a permanent part of the layout
+- **Integrated workflow**: Users can interact with AI while viewing JSON and map simultaneously
+
+#### Shadcn/UI AI Chatbot Integration
+- **Replace existing chat components**: Use shadcn/ui AI chatbot block components
+- **Modern chat interface**: Implement proper conversation flow with:
+  - Message streaming support
+  - Proper loading states
+  - Enhanced message display
+  - Better input handling
+- **Component references**: Use https://www.shadcn.io/blocks/ai-chatbot as the base
+
+### Updated Component Architecture
+
+```
+VrpExplorer
+├── VrpLayout (modified for 3 columns)
+│   ├── leftPanel: VrpJsonEditor (no assistant integration)
+│   ├── centerPanel: VrpMap
+│   └── rightPanel: VrpAssistantChat (new shadcn-based component)
+└── VrpAssistantProvider (moved to top level)
+```
+
+### Layout Specifications
+
+#### VrpLayout Component Updates
+- Support 3-panel ResizablePanelGroup instead of 2
+- Default sizes: 35% JSON | 40% Map | 25% Chat
+- Minimum sizes: 25% | 30% | 20%
+- Mobile: Stack vertically or use tabs for all three panels
+
+#### VRP Assistant Chat Panel
+- **Header**: "VRP AI Assistant" with status indicator
+- **Messages**: Full conversation history with proper scrolling
+- **Input**: Modern message input with send button
+- **Features**:
+  - Message streaming
+  - Loading indicators
+  - Error handling
+  - Proper accessibility
+
+### Implementation Priority
+
+1. **Phase 1**: Layout restructuring (3-column design)
+2. **Phase 2**: Shadcn/UI chat component integration
+3. **Phase 3**: Remove toggle button and assistant overlay logic
+4. **Phase 4**: CSV import feature (separate implementation)
+
+This layout change provides a better foundation for both the existing VRP modification features and future CSV import functionality.

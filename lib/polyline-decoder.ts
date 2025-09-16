@@ -44,5 +44,7 @@ export function decodePolyline(encoded: string): [number, number][] {
  */
 export function isEncodedPolyline(str: string): boolean {
   // Basic check: should be a string with valid polyline characters
-  return typeof str === 'string' && str.length > 0 && /^[a-zA-Z0-9_@?`~|\\-]*$/.test(str)
+  // Based on Google Polyline specification, valid characters are ASCII 63-126
+  // This includes all printable ASCII characters except space
+  return typeof str === 'string' && str.length > 0 && /^[\x3F-\x7E]*$/.test(str)
 }

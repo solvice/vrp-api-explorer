@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
 import { VrpMap } from './VrpMap'
+import { VrpAssistantPane } from './VrpAssistant/VrpAssistantPane'
 import { VrpApiError } from '@/lib/vrp-api'
 import { getSampleVrpData, SampleType } from '@/lib/sample-data'
 import { ValidationResult } from '@/lib/vrp-schema'
@@ -146,15 +147,18 @@ export function VrpExplorer() {
             onSampleChange={handleSampleChange}
           />
         }
-        rightPanel={
+        centerPanel={
           <VrpMap
             requestData={requestData as unknown as Record<string, unknown>}
             responseData={responseData}
           />
         }
+        rightPanel={
+          <VrpAssistantPane />
+        }
       />
-      
-      <Toaster 
+
+      <Toaster
         position="bottom-right"
         closeButton
         richColors

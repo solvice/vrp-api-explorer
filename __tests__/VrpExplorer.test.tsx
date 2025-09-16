@@ -26,9 +26,10 @@ jest.mock('../lib/vrp-api', () => ({
 
 // Mock the components
 jest.mock('../components/VrpLayout', () => ({
-  VrpLayout: ({ leftPanel, rightPanel }: any) => (
+  VrpLayout: ({ leftPanel, centerPanel, rightPanel }: any) => (
     <div data-testid="vrp-layout">
       <div data-testid="left-panel">{leftPanel}</div>
+      <div data-testid="center-panel">{centerPanel}</div>
       <div data-testid="right-panel">{rightPanel}</div>
     </div>
   )
@@ -83,6 +84,14 @@ jest.mock('../components/VrpMap', () => ({
       {responseData && <div data-testid="map-response">{JSON.stringify(responseData)}</div>}
     </div>
   )
+}))
+
+jest.mock('../components/VrpAssistant/VrpAssistantPane', () => ({
+  VrpAssistantPane: () => <div data-testid="vrp-assistant-pane">AI Assistant</div>
+}))
+
+jest.mock('../components/VrpAssistant/VrpAssistantContext', () => ({
+  VrpAssistantProvider: ({ children }: any) => <div data-testid="vrp-assistant-provider">{children}</div>
 }))
 
 // Mock sonner toast

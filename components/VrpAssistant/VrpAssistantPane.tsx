@@ -1,17 +1,10 @@
 'use client'
 
-import { useVrpAssistant } from './VrpAssistantContext'
 import { ShadcnChatInterface } from './ShadcnChatInterface'
 
 export function VrpAssistantPane() {
-  const { isOpen } = useVrpAssistant()
-
-  if (!isOpen) {
-    return null
-  }
-
   return (
-    <div 
+    <div
       data-testid="vrp-assistant-pane"
       className="h-full bg-background border-t shadow-lg"
       role="complementary"
@@ -28,7 +21,7 @@ export function VrpAssistantPane() {
             Powered by OpenAI
           </div>
         </div>
-        
+
         {/* Chat Interface */}
         <div className="flex-1 min-h-0">
           <ShadcnChatInterface />

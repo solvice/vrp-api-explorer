@@ -7,10 +7,7 @@ import type { editor } from 'monaco-editor'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { validateVrpRequest, ValidationResult } from '@/lib/vrp-schema'
 import { CheckCircle, XCircle, Loader2, Play, Settings, ExternalLink } from 'lucide-react'
-import { VrpAssistantProvider, useVrpAssistant } from '@/components/VrpAssistant/VrpAssistantContext'
-import { VrpAssistantButton } from '@/components/VrpAssistant/VrpAssistantButton'
-import { VrpAssistantPane } from '@/components/VrpAssistant/VrpAssistantPane'
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
+import { useVrpAssistant } from '@/components/VrpAssistant/VrpAssistantContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -179,7 +176,7 @@ function VrpJsonEditorContent({
   currentSample = 'simple',
   onSampleChange
 }: VrpJsonEditorProps) {
-  const { isOpen, setVrpData, setOnVrpDataUpdate } = useVrpAssistant()
+  const { setVrpData, setOnVrpDataUpdate } = useVrpAssistant()
   const [validationResult, setValidationResult] = useState<ValidationResult>({ valid: true, errors: [] })
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const [tempApiKey, setTempApiKey] = useState('')
@@ -191,6 +188,29 @@ function VrpJsonEditorContent({
   useEffect(() => {
     injectAIHighlightStyles()
   }, [])
+
+  // Set up VRP data sharing with AI assistant
+  useEffect(() => {
+    if (requestData) {
+      setVrpData(requestData as unknown as Vrp.VrpSyncSolveParams)
+    }
+  }, [requestData, setVrpData])
+
+  // Set up callback for AI-modified VRP data
+  useEffect(() => {
+    setOnVrpDataUpdate((newData: Vrp.VrpSyncSolveParams) => {
+      const newJsonString = JSON.stringify(newData, null, 2)
+      setJsonString(newJsonString)
+
+      // Trigger change event to parent
+      onChange(newData as unknown as Record<string, unknown>)
+
+      // Apply highlighting if editor is available
+      if (editorRef.current) {
+        highlightChangesAndScroll(editorRef.current, jsonString, newJsonString)
+      }
+    })
+  }, [setOnVrpDataUpdate, onChange, jsonString])
 
   // Validate data and notify parent
   const validateData = useCallback((data: Record<string, unknown>) => {
@@ -571,10 +591,6 @@ function VrpJsonEditorContent({
             </Select>
           </div>
           
-          {/* Prominent AI Assistant Button - positioned in editor area */}
-          <div className="absolute top-3 right-3 z-20">
-            <VrpAssistantButton prominent />
-          </div>
         </div>
         
         <div className="flex-1 flex flex-col min-h-0 relative">
@@ -658,31 +674,13 @@ function VrpJsonEditorContent({
     </div>
   )
 
-  return (
-    <>
-      {!isOpen ? (
-        editorContent
-      ) : (
-        <ResizablePanelGroup direction="vertical" className="h-full">
-          <ResizablePanel defaultSize={60} minSize={30}>
-            {editorContent}
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={40} minSize={20}>
-            <VrpAssistantPane />
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      )}
-    </>
-  )
+  return editorContent
 }
 
 export function VrpJsonEditor(props: VrpJsonEditorProps) {
   return (
     <TooltipProvider>
-      <VrpAssistantProvider>
-        <VrpJsonEditorContent {...props} />
-      </VrpAssistantProvider>
+      <VrpJsonEditorContent {...props} />
     </TooltipProvider>
   )
 }

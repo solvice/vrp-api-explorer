@@ -8,16 +8,15 @@ import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { ErrorHandlingService, type VrpError } from '@/lib/error-handling-service'
 
 interface VrpAssistantContextType {
-  isOpen: boolean
   isProcessing: boolean
   messages: Message[]
   vrpData: Vrp.VrpSyncSolveParams | null
   input: string
-  togglePane: () => void
   setProcessing: (processing: boolean) => void
   addMessage: (role: 'user' | 'assistant' | 'system', content: string) => void
   clearMessages: () => void
   processUserMessage: (message: string) => Promise<void>
+  processCsvUpload: (csvContent: string, filename: string) => Promise<void>
   setVrpData: (data: Vrp.VrpSyncSolveParams | null) => void
   handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
   handleSubmit: (e?: React.FormEvent) => void
@@ -32,7 +31,6 @@ interface VrpAssistantProviderProps {
 }
 
 export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
-  const [isOpen, setIsOpen] = useState(false)
   const [isProcessing, setIsProcessingState] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [vrpData, setVrpDataState] = useState<Vrp.VrpSyncSolveParams | null>(null)
@@ -54,10 +52,6 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
       ChatPersistence.saveMessages(messages)
     }
   }, [messages])
-
-  const togglePane = () => {
-    setIsOpen(prev => !prev)
-  }
 
   const setProcessing = (processing: boolean) => {
     setIsProcessingState(processing)
@@ -199,17 +193,110 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
     }
   }
 
+  const processCsvUpload = async (csvContent: string, filename: string) => {
+    try {
+      setProcessing(true)
+
+      // Add user message
+      addMessage('user', `📎 Uploaded CSV file: ${filename}`)
+
+      // Create OpenAI service lazily
+      let aiService = openAIService
+      if (!aiService) {
+        try {
+          aiService = new OpenAIService()
+        } catch {
+          addMessage('assistant', 'OpenAI service is not configured. Please check your API key configuration.')
+          return
+        }
+      }
+
+      // Convert CSV to VRP
+      const conversionResult = await aiService.convertCsvToVrp(csvContent, filename)
+
+      if (conversionResult?.vrpData) {
+        // Success - we have converted VRP data
+        const explanation = conversionResult.explanation || 'Successfully converted your CSV file to VRP format.'
+        addMessage('assistant', explanation)
+
+        // Update the VRP data in the editor through the callback
+        if (onVrpDataUpdate) {
+          try {
+            onVrpDataUpdate(conversionResult.vrpData)
+            setVrpData(conversionResult.vrpData)
+
+            // Add success message with conversion details
+            const successMessage = `✅ Converted ${filename} to VRP format (${conversionResult.rowsProcessed} rows processed)`
+            setTimeout(() => {
+              addMessage('system', successMessage)
+            }, 500)
+
+            // Add conversion notes if available
+            if (conversionResult.conversionNotes && conversionResult.conversionNotes.length > 0) {
+              const notesMessage = `📋 **Conversion Notes:**\n${conversionResult.conversionNotes.map((note) => `• ${note}`).join('\n')}`
+              setTimeout(() => {
+                addMessage('system', notesMessage)
+              }, 1000)
+            }
+
+          } catch (error) {
+            console.error('Failed to apply CSV conversion:', error)
+            addMessage('assistant', 'The CSV was converted but failed to apply to the editor. Please try again.')
+          }
+        } else {
+          addMessage('assistant', 'CSV converted successfully, but the editor connection is not available.')
+        }
+
+        // Log conversion for debugging
+        console.log('CSV Conversion completed:', {
+          filename,
+          rowsProcessed: conversionResult.rowsProcessed,
+          notes: conversionResult.conversionNotes
+        })
+      } else {
+        addMessage('assistant', 'I wasn\'t able to convert your CSV file to VRP format. Please check that it contains latitude and longitude columns.')
+      }
+
+    } catch (error) {
+      console.error('Error processing CSV upload:', error)
+
+      // Handle VrpError with detailed user feedback
+      if (error && typeof error === 'object' && 'type' in error) {
+        const vrpError = error as VrpError
+        const userMessage = ErrorHandlingService.formatUserError(vrpError)
+        addMessage('assistant', userMessage)
+
+        // Add specific suggestions as separate messages for better UX
+        if (vrpError.suggestions.length > 0) {
+          const suggestionMessage = vrpError.suggestions.length === 1
+            ? `💡 **Suggestion:** ${vrpError.suggestions[0]}`
+            : `💡 **Here are some suggestions:**\n${vrpError.suggestions.map((s) => `• ${s}`).join('\n')}`
+
+          // Add suggestions after a brief delay for better visual flow
+          setTimeout(() => {
+            addMessage('system', suggestionMessage)
+          }, 800)
+        }
+      } else {
+        // Fallback for unknown errors
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred during CSV conversion'
+        addMessage('assistant', `Failed to convert CSV file: ${errorMessage}. Please check your file format and try again.`)
+      }
+    } finally {
+      setProcessing(false)
+    }
+  }
+
   const value: VrpAssistantContextType = {
-    isOpen,
     isProcessing,
     messages,
     vrpData,
     input,
-    togglePane,
     setProcessing,
     addMessage,
     clearMessages,
     processUserMessage,
+    processCsvUpload,
     setVrpData,
     handleInputChange,
     handleSubmit,

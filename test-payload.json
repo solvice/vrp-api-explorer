@@ -1,0 +1,23 @@
+{
+  "jobs": [
+    { "name": "Brussels", "duration": 900, "location": { "latitude": 50.8465, "longitude": 4.3517 } },
+    { "name": "Antwerp", "duration": 900, "location": { "latitude": 51.2213, "longitude": 4.4051 } },
+    { "name": "Ghent", "duration": 900, "location": { "latitude": 51.0538, "longitude": 3.7250 } }
+  ],
+  "resources": [
+    {
+      "name": "delivery_truck",
+      "shifts": [
+        {
+          "from": "2024-01-15T08:00:00Z",
+          "to": "2024-01-15T18:00:00Z",
+          "start": { "latitude": 50.8465, "longitude": 4.3517 },
+          "end": { "latitude": 50.8465, "longitude": 4.3517 }
+        }
+      ]
+    }
+  ],
+  "options": {
+    "polylines": true
+  }
+}
