@@ -33,11 +33,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const { csvContent, filename, instructions } = await request.json()
+    const { csvContent, filename, files, instructions } = await request.json()
 
-    if (!csvContent || !filename) {
+    // Handle both single file (csvContent + filename) and multiple files (files array)
+    const filesToProcess = files || (
+      csvContent && filename
+        ? [{ content: csvContent, name: filename }]
+        : null
+    )
+
+    if (!filesToProcess || filesToProcess.length === 0) {
       return NextResponse.json(
-        { error: 'Invalid request: csvContent and filename are required' },
+        { error: 'Invalid request: either csvContent+filename or files array is required' },
         { status: 400 }
       )
     }
@@ -48,16 +55,46 @@ export async function POST(request: NextRequest) {
     })
 
     console.log('🤖 Starting Code Interpreter workflow for CSV conversion...')
-    console.log('📁 Filename:', filename)
-    console.log('📊 CSV Content length:', csvContent.length)
+    console.log('📁 Files to process:', filesToProcess.length)
+    if (filesToProcess.length === 1) {
+      console.log('📁 Single file:', filesToProcess[0].name)
+      console.log('📊 Content length:', filesToProcess[0].content.length)
+    } else {
+      console.log('📁 Multiple files:', filesToProcess.map((f: { name: string; content: string }) => f.name).join(', '))
+      console.log('📊 Total content length:', filesToProcess.reduce((sum: number, f: { name: string; content: string }) => sum + f.content.length, 0))
+    }
 
-    // Step 1: Create a file from the CSV content
-    const file = await openai.files.create({
-      file: new File([csvContent], filename, { type: 'text/csv' }),
-      purpose: 'assistants'
-    })
+    // Step 1: Upload all files to OpenAI with enhanced error handling
+    const uploadPromises = filesToProcess.map((fileData: { name: string; content: string }) =>
+      openai.files.create({
+        file: new File([fileData.content], fileData.name, { type: 'text/csv' }),
+        purpose: 'assistants'
+      }).catch(error => ({ error, fileName: fileData.name }))
+    )
 
-    console.log('✅ File uploaded to OpenAI:', file.id)
+    const uploadResults = await Promise.all(uploadPromises)
+
+    // Separate successful uploads from failures
+    const successfulUploads = uploadResults.filter(result => !('error' in result)) as Array<{ id: string; [key: string]: unknown }>
+    const failedUploads = uploadResults.filter(result => 'error' in result) as Array<{ error: Error; fileName: string }>
+
+    if (failedUploads.length > 0) {
+      // Clean up any successful uploads before failing
+      await Promise.all(
+        successfulUploads.map(file =>
+          openai.files.delete(file.id).catch(err =>
+            console.warn(`Failed to cleanup file ${file.id}:`, err)
+          )
+        )
+      )
+
+      const failedFileNames = failedUploads.map(f => f.fileName).join(', ')
+      const errorMessages = failedUploads.map(f => `${f.fileName}: ${f.error.message}`).join('; ')
+      throw new Error(`Failed to upload ${failedUploads.length} file(s): ${failedFileNames}. Details: ${errorMessages}`)
+    }
+
+    const uploadedFiles = successfulUploads
+    console.log(`✅ ${uploadedFiles.length} file(s) uploaded to OpenAI:`, uploadedFiles.map(f => f.id))
 
     // Step 2: Create an assistant with Code Interpreter tool
     const assistant = await openai.beta.assistants.create({
@@ -81,7 +118,7 @@ Return your final result as a JSON object with this structure:
   "conversionNotes": ["Note about assumption 1", "Note about assumption 2"],
   "rowsProcessed": number
 }`,
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       tools: [{ type: "code_interpreter" }]
     })
 
@@ -92,7 +129,8 @@ Return your final result as a JSON object with this structure:
       messages: [
         {
           role: "user",
-          content: `Please analyze the attached CSV file "${filename}" and convert it to VRP JSON format. Use the Code Interpreter to:
+          content: filesToProcess.length === 1
+            ? `Please analyze the attached CSV file "${filesToProcess[0].name}" and convert it to VRP JSON format. Use the Code Interpreter to:
 
 1. Load and examine the CSV structure
 2. Process each row to create VRP jobs
@@ -101,13 +139,24 @@ Return your final result as a JSON object with this structure:
 5. Generate appropriate vehicle resources
 6. Validate the output structure
 
-Please show your work step by step and provide the final JSON result.`,
-          attachments: [
-            {
-              file_id: file.id,
-              tools: [{ type: "code_interpreter" }]
-            }
-          ]
+Please show your work step by step and provide the final JSON result.`
+            : `Please analyze the ${filesToProcess.length} attached CSV files and merge them into a single VRP JSON format. Use the Code Interpreter to:
+
+1. Load and examine all CSV files:
+${filesToProcess.map((f: { name: string; content: string }) => `   - ${f.name}`).join('\n')}
+2. Identify relationships between files (common IDs, location references, etc.)
+3. Process files in logical order (locations → jobs → vehicles)
+4. Merge data appropriately based on discovered relationships
+5. Convert durations from minutes to seconds
+6. Map coordinates correctly
+7. Generate appropriate vehicle resources
+8. Validate the final consolidated output structure
+
+Please show your work step by step for each file and provide the final merged JSON result.`,
+          attachments: uploadedFiles.map(file => ({
+            file_id: file.id,
+            tools: [{ type: "code_interpreter" }]
+          }))
         }
       ]
     })
@@ -134,14 +183,24 @@ Please show your work step by step and provide the final JSON result.`,
       throw new Error('Run creation failed - no run ID returned')
     }
 
-    // Step 5: Wait for completion with polling
+    // Step 5: Wait for completion with polling (dynamic timeout based on file characteristics)
+    const calculateTimeout = (files: Array<{ name: string; content: string }>) => {
+      const totalSize = files.reduce((sum, f) => sum + f.content.length, 0)
+      const baseTimeout = files.length === 1 ? 60 : 90 // Base: 1min single, 1.5min multi
+      const sizeMultiplier = Math.ceil(totalSize / 50000) // Extra 30s per 50KB
+      const fileCountMultiplier = Math.max(0, files.length - 3) * 15 // Extra 15s per file beyond 3
+      return Math.min(baseTimeout + sizeMultiplier * 30 + fileCountMultiplier, 300) // Max 5 minutes
+    }
+
     let runStatus = await openai.beta.threads.runs.retrieve(run.id, { thread_id: thread.id })
     let attempts = 0
-    const maxAttempts = 60 // 60 seconds max wait time
+    const maxAttempts = calculateTimeout(filesToProcess)
+
+    console.log(`⏱️ Dynamic timeout calculated: ${maxAttempts}s for ${filesToProcess.length} files (${filesToProcess.reduce((sum: number, f: { name: string; content: string }) => sum + f.content.length, 0)} total chars)`)
 
     while (runStatus.status === 'in_progress' || runStatus.status === 'queued') {
       if (attempts >= maxAttempts) {
-        throw new Error('Code Interpreter execution timeout')
+        throw new Error(`Code Interpreter execution timeout processing ${filesToProcess.length} file(s)`)
       }
 
       await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
@@ -185,9 +244,14 @@ Please show your work step by step and provide the final JSON result.`,
 
     // Step 7: Clean up resources
     try {
-      await openai.files.delete(file.id)
+      // Delete all uploaded files
+      await Promise.all(uploadedFiles.map(file =>
+        openai.files.delete(file.id).catch(err =>
+          console.warn(`⚠️ Failed to delete file ${file.id}:`, err)
+        )
+      ))
       await openai.beta.assistants.delete(assistant.id)
-      console.log('🧹 Cleanup completed')
+      console.log('🧹 Cleanup completed for all files')
     } catch (cleanupError) {
       console.warn('⚠️ Cleanup warning:', cleanupError)
       // Don't fail the request due to cleanup issues
@@ -228,8 +292,9 @@ Please show your work step by step and provide the final JSON result.`,
       success: true,
       result: vrpResult,
       rawResponse: resultText,
-      fileId: file.id,
+      fileId: uploadedFiles[0].id, // Keep for backwards compatibility
       runId: run.id,
+      filesProcessed: filesToProcess.length,
       executionMetadata: {
         threadId: thread.id,
         runId: run.id,

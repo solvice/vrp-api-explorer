@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { Message, ExecutionMetadata } from '@/components/ui/chat-message'
 import { ChatPersistence } from './ChatPersistence'
-import { OpenAIService } from './OpenAIService'
+import { OpenAIService, type CsvToVrpResponse } from './OpenAIService'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { ErrorHandlingService, type VrpError } from '@/lib/error-handling-service'
 
@@ -17,6 +17,7 @@ interface VrpAssistantContextType {
   clearMessages: () => void
   processUserMessage: (message: string) => Promise<void>
   processCsvUpload: (csvContent: string, filename: string) => Promise<void>
+  processMultipleCsvUpload: (files: Array<{ content: string; name: string }>) => Promise<void>
   setVrpData: (data: Vrp.VrpSyncSolveParams | null) => void
   handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
   handleSubmit: (e?: React.FormEvent) => void
@@ -225,76 +226,116 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
         conversionResult = await aiService.convertCsvToVrp(csvContent, filename)
       }
 
-      if (conversionResult?.vrpData) {
-        // Success - we have converted VRP data
-        const explanation = conversionResult.explanation || 'Successfully converted your CSV file to VRP format.'
-        addMessage('assistant', explanation, conversionResult.executionMetadata)
-
-        // Update the VRP data in the editor through the callback
-        if (onVrpDataUpdate) {
-          try {
-            onVrpDataUpdate(conversionResult.vrpData)
-            setVrpData(conversionResult.vrpData)
-
-            // Add success message with conversion details
-            const successMessage = `✅ Converted ${filename} to VRP format (${conversionResult.rowsProcessed} rows processed)`
-            setTimeout(() => {
-              addMessage('system', successMessage)
-            }, 500)
-
-            // Add conversion notes if available
-            if (conversionResult.conversionNotes && conversionResult.conversionNotes.length > 0) {
-              const notesMessage = `📋 **Conversion Notes:**\n${conversionResult.conversionNotes.map((note) => `• ${note}`).join('\n')}`
-              setTimeout(() => {
-                addMessage('system', notesMessage)
-              }, 1000)
-            }
-
-          } catch (error) {
-            console.error('Failed to apply CSV conversion:', error)
-            addMessage('assistant', 'The CSV was converted but failed to apply to the editor. Please try again.')
-          }
-        } else {
-          addMessage('assistant', 'CSV converted successfully, but the editor connection is not available.')
-        }
-
-        // Log conversion for debugging
-        console.log('CSV Conversion completed:', {
-          filename,
-          rowsProcessed: conversionResult.rowsProcessed,
-          notes: conversionResult.conversionNotes
-        })
-      } else {
-        addMessage('assistant', 'I wasn\'t able to convert your CSV file to VRP format. Please check that it contains latitude and longitude columns.')
-      }
-
+      await handleConversionResult(conversionResult, filename)
     } catch (error) {
-      console.error('Error processing CSV upload:', error)
-
-      // Handle VrpError with detailed user feedback
-      if (error && typeof error === 'object' && 'type' in error) {
-        const vrpError = error as VrpError
-        const userMessage = ErrorHandlingService.formatUserError(vrpError)
-        addMessage('assistant', userMessage)
-
-        // Add specific suggestions as separate messages for better UX
-        if (vrpError.suggestions.length > 0) {
-          const suggestionMessage = vrpError.suggestions.length === 1
-            ? `💡 **Suggestion:** ${vrpError.suggestions[0]}`
-            : `💡 **Here are some suggestions:**\n${vrpError.suggestions.map((s) => `• ${s}`).join('\n')}`
-
-          // Add suggestions after a brief delay for better visual flow
-          setTimeout(() => {
-            addMessage('system', suggestionMessage)
-          }, 800)
-        }
-      } else {
-        // Fallback for unknown errors
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred during CSV conversion'
-        addMessage('assistant', `Failed to convert CSV file: ${errorMessage}. Please check your file format and try again.`)
-      }
+      await handleConversionError(error)
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const processMultipleCsvUpload = async (files: Array<{ content: string; name: string }>) => {
+    try {
+      setProcessing(true)
+
+      // Add user message
+      const fileNames = files.map(f => f.name).join(', ')
+      addMessage('user', `📎 Uploaded ${files.length} CSV files: ${fileNames}`)
+
+      // Create OpenAI service lazily
+      let aiService = openAIService
+      if (!aiService) {
+        try {
+          aiService = new OpenAIService()
+        } catch {
+          addMessage('assistant', 'OpenAI service is not configured. Please check your API key configuration.')
+          return
+        }
+      }
+
+      // Convert multiple CSVs to VRP using Code Interpreter (no fallback for multi-file)
+      addMessage('system', `🤖 Using OpenAI Code Interpreter to process and merge ${files.length} CSV files...`)
+      const conversionResult = await aiService.convertCsvToVrpWithCodeInterpreter(files)
+      addMessage('system', '✅ Multi-file Code Interpreter processing completed successfully')
+
+      await handleConversionResult(conversionResult, `${files.length} files`)
+    } catch (error) {
+      await handleConversionError(error)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleConversionResult = async (conversionResult: CsvToVrpResponse | null, sourceDescription: string) => {
+
+    if (conversionResult?.vrpData) {
+      // Success - we have converted VRP data
+      const explanation = conversionResult.explanation || `Successfully converted ${sourceDescription} to VRP format.`
+      addMessage('assistant', explanation, conversionResult.executionMetadata)
+
+      // Update the VRP data in the editor through the callback
+      if (onVrpDataUpdate) {
+        try {
+          onVrpDataUpdate(conversionResult.vrpData)
+          setVrpData(conversionResult.vrpData)
+
+          // Add success message with conversion details
+          const successMessage = `✅ Converted ${sourceDescription} to VRP format (${conversionResult.rowsProcessed} rows processed)`
+          setTimeout(() => {
+            addMessage('system', successMessage)
+          }, 500)
+
+          // Add conversion notes if available
+          if (conversionResult.conversionNotes && conversionResult.conversionNotes.length > 0) {
+            const notesMessage = `📋 **Conversion Notes:**\n${conversionResult.conversionNotes.map((note) => `• ${note}`).join('\n')}`
+            setTimeout(() => {
+              addMessage('system', notesMessage)
+            }, 1000)
+          }
+
+        } catch (error) {
+          console.error('Failed to apply CSV conversion:', error)
+          addMessage('assistant', 'The CSV was converted but failed to apply to the editor. Please try again.')
+        }
+      } else {
+        addMessage('assistant', 'CSV converted successfully, but the editor connection is not available.')
+      }
+
+      // Log conversion for debugging
+      console.log('CSV Conversion completed:', {
+        source: sourceDescription,
+        rowsProcessed: conversionResult.rowsProcessed,
+        notes: conversionResult.conversionNotes
+      })
+    } else {
+      addMessage('assistant', `I wasn't able to convert ${sourceDescription} to VRP format. Please check the file format and try again.`)
+    }
+  }
+
+  const handleConversionError = async (error: unknown) => {
+    console.error('Error processing CSV upload:', error)
+
+    // Handle VrpError with detailed user feedback
+    if (error && typeof error === 'object' && 'type' in error) {
+      const vrpError = error as VrpError
+      const userMessage = ErrorHandlingService.formatUserError(vrpError)
+      addMessage('assistant', userMessage)
+
+      // Add specific suggestions as separate messages for better UX
+      if (vrpError.suggestions.length > 0) {
+        const suggestionMessage = vrpError.suggestions.length === 1
+          ? `💡 **Suggestion:** ${vrpError.suggestions[0]}`
+          : `💡 **Here are some suggestions:**\n${vrpError.suggestions.map((s) => `• ${s}`).join('\n')}`
+
+        // Add suggestions after a brief delay for better visual flow
+        setTimeout(() => {
+          addMessage('system', suggestionMessage)
+        }, 800)
+      }
+    } else {
+      // Fallback for unknown errors
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred during CSV conversion'
+      addMessage('assistant', `Failed to convert CSV files: ${errorMessage}. Please check your file format and try again.`)
     }
   }
 
@@ -308,6 +349,7 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
     clearMessages,
     processUserMessage,
     processCsvUpload,
+    processMultipleCsvUpload,
     setVrpData,
     handleInputChange,
     handleSubmit,

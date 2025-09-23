@@ -354,11 +354,19 @@ Return exactly 3-5 suggestions as a JSON array of strings.`;
 
   /**
    * Convert CSV data to VRP format using OpenAI Code Interpreter
+   * Supports both single file and multiple file inputs
    */
-  async convertCsvToVrpWithCodeInterpreter(csvContent: string, filename: string): Promise<CsvToVrpResponse> {
+  async convertCsvToVrpWithCodeInterpreter(
+    input: string | Array<{ content: string; name: string }>,
+    filename?: string
+  ): Promise<CsvToVrpResponse> {
     try {
       return await ErrorHandlingService.withRetry(async () => {
         const instructions = OpenAIService.buildCodeInterpreterInstructions();
+
+        // Normalize input to handle both single and multiple files
+        const isMultipleFiles = Array.isArray(input);
+        const files = isMultipleFiles ? input : [{ content: input, name: filename! }];
 
         const response = await fetch('/api/openai/code-interpreter', {
           method: 'POST',
@@ -366,8 +374,7 @@ Return exactly 3-5 suggestions as a JSON array of strings.`;
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            csvContent,
-            filename,
+            ...(isMultipleFiles ? { files } : { csvContent: input, filename }),
             instructions
           }),
         });
@@ -413,10 +420,14 @@ Return exactly 3-5 suggestions as a JSON array of strings.`;
     } catch (error: unknown) {
       console.error('🚨 Code Interpreter CSV conversion error:', error);
       const vrpError = ErrorHandlingService.classifyError(error);
+      const isMultipleFiles = Array.isArray(input);
+      const fileInfo = isMultipleFiles
+        ? { fileCount: input.length, totalSize: input.reduce((sum, f) => sum + f.content.length, 0) }
+        : { filename, csvLength: (input as string).length };
+
       ErrorHandlingService.logError(vrpError, {
         operation: 'convertCsvToVrpWithCodeInterpreter',
-        filename,
-        csvLength: csvContent.length
+        ...fileInfo
       });
       throw vrpError;
     }
@@ -554,9 +565,10 @@ ${VrpSchemaService.getSchemaForAI()}
   static buildCodeInterpreterInstructions(): string {
     return `You are a VRP (Vehicle Routing Problem) data converter using Code Interpreter. Your task is to:
 
-1. Load and analyze the uploaded CSV file using pandas or similar tools
-2. Process the data programmatically to convert it to VRP JSON format
-3. Handle data transformation including:
+1. Load and analyze uploaded CSV file(s) using pandas or similar tools
+2. For multiple files: identify relationships and merge appropriately
+3. Process the data programmatically to convert it to VRP JSON format
+4. Handle data transformation including:
    - Converting durations from minutes to seconds
    - Mapping coordinates properly
    - Creating valid VRP job structures
@@ -566,6 +578,8 @@ Use the following VRP schema structure:
 ${VrpSchemaService.getSchemaForAI()}
 
 ## Processing Steps:
+
+### For Single File:
 1. Load the CSV and examine its structure
 2. Identify column mappings (lat/latitude → location.latitude, etc.)
 3. Process each row to create VRP jobs with proper data types
@@ -574,12 +588,34 @@ ${VrpSchemaService.getSchemaForAI()}
 6. Create proper time windows and defaults where needed
 7. Validate the final structure
 
+### For Multiple Files:
+1. Load all CSV files and examine their structures
+2. Identify file types based on content and naming:
+   - Location/depot files (lat/lon coordinates, addresses)
+   - Job/customer files (orders, deliveries, service requirements)
+   - Vehicle/fleet files (capacity, availability, constraints)
+   - Constraint files (time windows, rules)
+3. Identify relationships between files:
+   - Common ID columns (customer_id, location_id, vehicle_id)
+   - Geographic coordinates that need to be matched
+   - Time windows that need to be aligned
+4. Process files in logical order (locations → jobs → vehicles)
+5. Merge data based on identified relationships
+6. Handle missing relationships gracefully with reasonable defaults
+7. Convert and validate as above
+
+## File Relationship Detection:
+- Look for common column names across files
+- Match location data by coordinates or address
+- Link jobs to locations by ID or proximity
+- Assign vehicles based on capacity and location constraints
+
 ## Output Format:
 Return a JSON object with this exact structure:
 {
   "vrpData": { /* complete VRP request object */ },
   "explanation": "Brief explanation of the conversion process",
-  "conversionNotes": ["Note about assumption 1", "Note about assumption 2"],
+  "conversionNotes": ["Note about assumption 1", "File relationship details", "Data merge notes"],
   "rowsProcessed": number
 }
 

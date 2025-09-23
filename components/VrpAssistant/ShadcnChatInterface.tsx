@@ -15,7 +15,8 @@ export function ShadcnChatInterface() {
     handleSubmit,
     isProcessing,
     processUserMessage,
-    processCsvUpload
+    processCsvUpload,
+    processMultipleCsvUpload
   } = useVrpAssistant()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -87,15 +88,17 @@ export function ShadcnChatInterface() {
           return
         }
 
-        // Check for latitude/longitude columns (basic check)
+        // For multi-file uploads, be more lenient with validation
+        // Check for latitude/longitude columns (basic check) only for single files
         const header = lines[0]?.toLowerCase() || ''
         const hasLatLon = (
           (header.includes('lat') || header.includes('latitude')) &&
           (header.includes('lon') || header.includes('lng') || header.includes('longitude'))
         )
 
+        // For now, still require lat/lon but this will be relaxed for multi-file scenarios
         if (!hasLatLon) {
-          reject(new Error('CSV must contain latitude and longitude columns'))
+          reject(new Error('CSV must contain latitude and longitude columns (or use multi-file upload for related data)'))
           return
         }
 
@@ -110,13 +113,98 @@ export function ShadcnChatInterface() {
     })
   }
 
+  const validateMultipleCsvFiles = async (files: FileList): Promise<Array<{ content: string; name: string }>> => {
+    const maxFiles = 10
+    const maxSizePerFile = 5 * 1024 * 1024 // 5MB per file
+    const maxTotalSize = 25 * 1024 * 1024 // 25MB total
+
+    // Check file count
+    if (files.length > maxFiles) {
+      throw new Error(`Maximum ${maxFiles} files allowed (selected: ${files.length})`)
+    }
+
+    // Check total size
+    const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0)
+    if (totalSize > maxTotalSize) {
+      const totalMB = (totalSize / 1024 / 1024).toFixed(1)
+      const maxMB = (maxTotalSize / 1024 / 1024).toFixed(1)
+      throw new Error(`Total file size ${totalMB}MB exceeds limit of ${maxMB}MB`)
+    }
+
+    const filePromises = Array.from(files).map(async (file) => {
+      // Check file extension
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        throw new Error(`File "${file.name}" is not a CSV file`)
+      }
+
+      // Check individual file size
+      if (file.size > maxSizePerFile) {
+        const fileMB = (file.size / 1024 / 1024).toFixed(1)
+        const maxMB = (maxSizePerFile / 1024 / 1024).toFixed(1)
+        throw new Error(`File "${file.name}" (${fileMB}MB) exceeds ${maxMB}MB limit`)
+      }
+
+      // Check for empty files
+      if (file.size === 0) {
+        throw new Error(`File "${file.name}" is empty`)
+      }
+
+      return new Promise<{ content: string; name: string }>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const content = e.target?.result as string
+          if (!content) {
+            reject(new Error(`Could not read content of "${file.name}"`))
+            return
+          }
+
+          // Basic CSV structure validation
+          const lines = content.trim().split('\n')
+          if (lines.length < 2) {
+            reject(new Error(`File "${file.name}" must have at least header and one data row`))
+            return
+          }
+
+          if (lines.length > 501) { // 500 data rows + header
+            reject(new Error(`File "${file.name}" exceeds 500 rows limit (has ${lines.length - 1} data rows)`))
+            return
+          }
+
+          // Basic CSV format validation
+          const header = lines[0]
+          if (!header.includes(',')) {
+            reject(new Error(`File "${file.name}" doesn't appear to be a valid CSV (no commas in header)`))
+            return
+          }
+
+          resolve({ content, name: file.name })
+        }
+
+        reader.onerror = () => {
+          reject(new Error(`Error reading file "${file.name}"`))
+        }
+
+        reader.readAsText(file)
+      })
+    })
+
+    return Promise.all(filePromises)
+  }
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+    const files = event.target.files
+    if (!files || files.length === 0) return
 
     try {
-      const csvContent = await validateCsvFile(file)
-      await processCsvUpload(csvContent, file.name)
+      if (files.length === 1) {
+        // Single file upload (existing flow)
+        const csvContent = await validateCsvFile(files[0])
+        await processCsvUpload(csvContent, files[0].name)
+      } else {
+        // Multiple file upload (new flow)
+        const fileData = await validateMultipleCsvFiles(files)
+        await processMultipleCsvUpload(fileData)
+      }
     } catch (error) {
       // Error handling will be done in processCsvUpload
       console.error('File validation error:', error)
@@ -226,11 +314,12 @@ export function ShadcnChatInterface() {
           </div>
         </form>
 
-        {/* Hidden file input */}
+        {/* Hidden file input - supports multiple files */}
         <input
           ref={fileInputRef}
           type="file"
           accept=".csv"
+          multiple
           onChange={handleFileChange}
           className="hidden"
         />
