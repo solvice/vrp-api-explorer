@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
-import { Message } from '@/components/ui/chat-message'
+import { Message, ExecutionMetadata } from '@/components/ui/chat-message'
 import { ChatPersistence } from './ChatPersistence'
 import { OpenAIService } from './OpenAIService'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
@@ -13,7 +13,7 @@ interface VrpAssistantContextType {
   vrpData: Vrp.VrpSyncSolveParams | null
   input: string
   setProcessing: (processing: boolean) => void
-  addMessage: (role: 'user' | 'assistant' | 'system', content: string) => void
+  addMessage: (role: 'user' | 'assistant' | 'system', content: string, executionMetadata?: ExecutionMetadata) => void
   clearMessages: () => void
   processUserMessage: (message: string) => Promise<void>
   processCsvUpload: (csvContent: string, filename: string) => Promise<void>
@@ -57,12 +57,13 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
     setIsProcessingState(processing)
   }
 
-  const addMessage = (role: 'user' | 'assistant' | 'system', content: string) => {
+  const addMessage = (role: 'user' | 'assistant' | 'system', content: string, executionMetadata?: ExecutionMetadata) => {
     const newMessage: Message = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       role,
       content: content.trim(),
-      createdAt: new Date()
+      createdAt: new Date(),
+      executionMetadata
     }
     setMessages(prev => {
       const updatedMessages = [...prev, newMessage]
@@ -211,13 +212,23 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
         }
       }
 
-      // Convert CSV to VRP
-      const conversionResult = await aiService.convertCsvToVrp(csvContent, filename)
+      // Convert CSV to VRP using Code Interpreter first, fallback to traditional method
+      let conversionResult
+      try {
+        // Try Code Interpreter first for better data processing
+        addMessage('system', '🤖 Using OpenAI Code Interpreter for advanced CSV processing...')
+        conversionResult = await aiService.convertCsvToVrpWithCodeInterpreter(csvContent, filename)
+        addMessage('system', '✅ Code Interpreter processing completed successfully')
+      } catch (codeInterpreterError) {
+        console.warn('Code Interpreter failed, falling back to traditional method:', codeInterpreterError)
+        addMessage('system', '⚠️ Code Interpreter unavailable, using traditional CSV processing...')
+        conversionResult = await aiService.convertCsvToVrp(csvContent, filename)
+      }
 
       if (conversionResult?.vrpData) {
         // Success - we have converted VRP data
         const explanation = conversionResult.explanation || 'Successfully converted your CSV file to VRP format.'
-        addMessage('assistant', explanation)
+        addMessage('assistant', explanation, conversionResult.executionMetadata)
 
         // Update the VRP data in the editor through the callback
         if (onVrpDataUpdate) {

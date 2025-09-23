@@ -330,17 +330,17 @@ export class JsonModificationService {
   /**
    * Check if the service is properly configured
    */
-  isConfigured(): boolean {
-    return this.openAIService.isConfigured()
+  async isConfigured(): Promise<boolean> {
+    return await this.openAIService.isConfigured()
   }
 
   /**
    * Get service status information
    */
-  getStatus(): { configured: boolean; apiKey: string } {
+  async getStatus(): Promise<{ configured: boolean; apiKey: string }> {
     return {
-      configured: this.isConfigured(),
-      apiKey: this.openAIService.getMaskedApiKey()
+      configured: await this.isConfigured(),
+      apiKey: this.openAIService.getConfigurationStatus()
     }
   }
 }

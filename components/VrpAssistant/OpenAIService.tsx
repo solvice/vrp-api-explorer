@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { VrpSchemaService } from "../../lib/vrp-schema-service";
 import { Vrp } from "solvice-vrp-solver/resources/vrp/vrp";
 import { ErrorHandlingService } from '@/lib/error-handling-service';
@@ -23,12 +24,37 @@ export interface CsvToVrpResponse {
   explanation: string;
   conversionNotes: string[];
   rowsProcessed: number;
+  executionMetadata?: {
+    threadId: string;
+    runId: string;
+    stepCount: number;
+    hasLogs: boolean;
+  };
 }
 
+// Zod schemas for structured outputs
+const VrpModificationResponseSchema = z.object({
+  modifiedData: z.any(), // VRP data structure - using any to match existing interface
+  explanation: z.string(),
+  changes: z.array(z.object({
+    type: z.enum(["add", "modify", "remove"]),
+    target: z.enum(["job", "resource", "option"]),
+    description: z.string()
+  }))
+});
+
+const CsvToVrpResponseSchema = z.object({
+  vrpData: z.any(), // VRP data structure - using any to match existing interface
+  explanation: z.string(),
+  conversionNotes: z.array(z.string()),
+  rowsProcessed: z.number()
+});
+
 export class OpenAIService {
+  private static readonly API_BASE_URL = '/api/openai/chat';
+
   constructor() {
-    // No longer need API key on client-side
-    // All API calls go through our server-side API route
+    // No client initialization needed - using server-side API
   }
 
   async sendMessage(message: string, systemPrompt?: string): Promise<string> {
@@ -47,25 +73,30 @@ export class OpenAIService {
     });
 
     try {
-      const response = await fetch('/api/openai/chat', {
+      const response = await fetch(OpenAIService.API_BASE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           messages,
-          model: "gpt-4",
+          model: 'gpt-4o',
           max_tokens: 1000,
           temperature: 0.7,
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `API error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
+
+      if (!data.content) {
+        throw new Error("No content in OpenAI response");
+      }
+
       return data.content;
     } catch (error: unknown) {
       if (error instanceof Error) {
@@ -91,18 +122,18 @@ export class OpenAIService {
     });
 
     try {
-      console.log('🤖 Calling OpenAI API route with JSON mode...');
-      console.log('Model: gpt-4o');
+      console.log('🤖 Calling OpenAI API with structured output...');
+      console.log('Model: gpt-4o-2024-08-06');
       console.log('Messages length:', messages.length);
-      
-      const response = await fetch('/api/openai/chat', {
+
+      const response = await fetch(OpenAIService.API_BASE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           messages,
-          model: "gpt-4o", // Use gpt-4o for JSON mode
+          model: 'gpt-4o',
           max_tokens: 2000,
           temperature: 0.3,
           response_format: { type: "json_object" }
@@ -110,31 +141,32 @@ export class OpenAIService {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `API error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
+
       console.log('✅ OpenAI response received');
       console.log('Usage:', data.usage);
 
       const content = data.content;
       if (!content) {
-        throw new Error("Invalid response format from OpenAI API - no content");
+        throw new Error("No content in OpenAI response");
       }
 
       console.log('📝 Response content length:', content.length);
-      
+
       const parsed = JSON.parse(content) as VrpModificationResponse;
-      console.log('✅ Successfully parsed structured response');
-      
+      console.log('✅ Successfully parsed JSON response');
+
       return parsed;
     } catch (error: unknown) {
       console.error('❌ Error in sendStructuredMessage:', error);
       console.error('Error type:', typeof error);
       console.error('Error constructor:', error && typeof error === 'object' && 'constructor' in error ? error.constructor?.name : 'Unknown');
       console.error('Error message:', error instanceof Error ? error.message : 'Unknown');
-      
+
       // Re-throw with more context
       throw new Error(`Structured output failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -142,19 +174,35 @@ export class OpenAIService {
 
 
   /**
-   * Check if the service is properly configured
+   * Check if the service is properly configured by testing the API
    */
-  isConfigured(): boolean {
-    // Always return true as configuration is now handled server-side
-    return true;
+  async isConfigured(): Promise<boolean> {
+    try {
+      const response = await fetch(OpenAIService.API_BASE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'test' }],
+          model: 'gpt-4o',
+          max_tokens: 1,
+          temperature: 0.1,
+        }),
+      });
+
+      // If we get a successful response or rate limit, the API key is configured
+      return response.status === 200 || response.status === 429;
+    } catch {
+      return false;
+    }
   }
 
   /**
-   * Get a masked version of the API key for display purposes
+   * Get configuration status for display purposes
    */
-  getMaskedApiKey(): string {
-    // API key is now handled server-side, so we can't display it
-    return "Configured (Server-side)";
+  getConfigurationStatus(): string {
+    return "Server-side configured";
   }
 
   /**
@@ -241,46 +289,6 @@ ${VrpSchemaService.getSchemaForAI()}
 - List specific changes in the changes array`;
   }
 
-  /**
-   * Build legacy system prompt (for non-structured calls)
-   */
-  private buildVrpSystemPrompt(): string {
-    return `You are a VRP (Vehicle Routing Problem) optimization assistant. Your job is to modify VRP JSON data based on user requests.
-
-${VrpSchemaService.getSchemaForAI()}
-
-## Instructions:
-1. Understand the user's request for VRP modifications
-2. Apply changes to the provided JSON data
-3. Ensure all modifications preserve required structure
-4. Return a valid JSON response with the modified data
-
-## Response Format:
-CRITICAL: You MUST respond with ONLY valid JSON. Do not include any explanatory text before or after the JSON.
-
-Return a JSON object with this exact structure:
-{
-  "modifiedData": <the complete modified VRP JSON>,
-  "explanation": "Brief explanation of what was changed",
-  "changes": [
-    {
-      "type": "add|modify|remove",
-      "target": "job|resource|option", 
-      "description": "Description of this specific change"
-    }
-  ]
-}
-
-## Rules:
-- ONLY return valid JSON - no additional text or explanations outside the JSON
-- Always preserve the core structure (jobs array, resources array)
-- Keep all existing data unless specifically asked to remove it
-- Use proper ISO datetime formats (YYYY-MM-DDTHH:mm:ssZ)
-- Validate job and resource names are unique
-- Be conservative: ask for clarification if the request is ambiguous
-- Focus on the specific changes requested, don't optimize the entire solution`;
-  }
-
 
   /**
    * Build user message with current data and request
@@ -345,16 +353,85 @@ Return exactly 3-5 suggestions as a JSON array of strings.`;
   }
 
   /**
-   * Convert CSV data to VRP format using OpenAI function calling
+   * Convert CSV data to VRP format using OpenAI Code Interpreter
+   */
+  async convertCsvToVrpWithCodeInterpreter(csvContent: string, filename: string): Promise<CsvToVrpResponse> {
+    try {
+      return await ErrorHandlingService.withRetry(async () => {
+        const instructions = OpenAIService.buildCodeInterpreterInstructions();
+
+        const response = await fetch('/api/openai/code-interpreter', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            csvContent,
+            filename,
+            instructions
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.success || !data.result) {
+          throw new Error("Invalid response format from Code Interpreter API");
+        }
+
+        console.log('🔍 Code Interpreter raw response length:', data.rawResponse?.length || 0);
+        console.log('✅ Successfully parsed Code Interpreter response');
+
+        const result = data.result as CsvToVrpResponse;
+
+        // Validate the generated VRP data
+        const validation = VrpSchemaService.validateModification(
+          // Use a minimal VRP structure for comparison
+          { jobs: [], resources: [] } as Vrp.VrpSyncSolveParams,
+          result.vrpData,
+        );
+
+        if (!validation.valid) {
+          throw new Error(
+            `Generated VRP data is invalid: ${validation.errors.join(", ")}`,
+          );
+        }
+
+        // Attach execution metadata for logs display
+        result.executionMetadata = data.executionMetadata;
+
+        return result;
+      }, {
+        maxRetries: 1, // Code Interpreter takes longer, fewer retries
+        baseDelay: 2000,
+        maxDelay: 15000
+      });
+    } catch (error: unknown) {
+      console.error('🚨 Code Interpreter CSV conversion error:', error);
+      const vrpError = ErrorHandlingService.classifyError(error);
+      ErrorHandlingService.logError(vrpError, {
+        operation: 'convertCsvToVrpWithCodeInterpreter',
+        filename,
+        csvLength: csvContent.length
+      });
+      throw vrpError;
+    }
+  }
+
+  /**
+   * Convert CSV data to VRP format using OpenAI structured output
    */
   async convertCsvToVrp(csvContent: string, filename: string): Promise<CsvToVrpResponse> {
     try {
       return await ErrorHandlingService.withRetry(async () => {
-        const systemPrompt = this.buildCsvConversionSystemPrompt();
+        const systemPrompt = OpenAIService.buildCsvConversionSystemPrompt();
         const userMessage = `Convert this CSV file to VRP JSON format:\n\nFilename: ${filename}\n\nCSV Content:\n${csvContent}`;
 
-        // Use function calling for structured output
-        const response = await fetch('/api/openai/chat', {
+        const response = await fetch(OpenAIService.API_BASE_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -364,7 +441,7 @@ Return exactly 3-5 suggestions as a JSON array of strings.`;
               { role: "system", content: systemPrompt },
               { role: "user", content: userMessage }
             ],
-            model: "gpt-4o",
+            model: 'gpt-4o',
             max_tokens: 4000,
             temperature: 0.1,
             response_format: { type: "json_object" }
@@ -372,8 +449,8 @@ Return exactly 3-5 suggestions as a JSON array of strings.`;
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `API error: ${response.status}`);
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
         }
 
         const data = await response.json();
@@ -383,7 +460,10 @@ Return exactly 3-5 suggestions as a JSON array of strings.`;
           throw new Error("Invalid response format from OpenAI API - no content");
         }
 
+        console.log('📝 Response content length:', content.length);
+
         const parsed = JSON.parse(content) as CsvToVrpResponse;
+        console.log('✅ Successfully parsed JSON response');
 
         // Validate the generated VRP data
         const validation = VrpSchemaService.validateModification(
@@ -419,7 +499,7 @@ Return exactly 3-5 suggestions as a JSON array of strings.`;
   /**
    * Build system prompt for CSV to VRP conversion
    */
-  private buildCsvConversionSystemPrompt(): string {
+  static buildCsvConversionSystemPrompt(): string {
     return `You are a VRP (Vehicle Routing Problem) data converter. Convert CSV data to valid VRP JSON format.
 
 ${VrpSchemaService.getSchemaForAI()}
@@ -466,6 +546,44 @@ ${VrpSchemaService.getSchemaForAI()}
 - Generate descriptive job names if CSV names are poor
 - Ensure generated VRP passes validation
 - Include helpful notes about assumptions made during conversion`;
+  }
+
+  /**
+   * Build instructions for Code Interpreter CSV conversion
+   */
+  static buildCodeInterpreterInstructions(): string {
+    return `You are a VRP (Vehicle Routing Problem) data converter using Code Interpreter. Your task is to:
+
+1. Load and analyze the uploaded CSV file using pandas or similar tools
+2. Process the data programmatically to convert it to VRP JSON format
+3. Handle data transformation including:
+   - Converting durations from minutes to seconds
+   - Mapping coordinates properly
+   - Creating valid VRP job structures
+   - Generating appropriate vehicle resources
+
+Use the following VRP schema structure:
+${VrpSchemaService.getSchemaForAI()}
+
+## Processing Steps:
+1. Load the CSV and examine its structure
+2. Identify column mappings (lat/latitude → location.latitude, etc.)
+3. Process each row to create VRP jobs with proper data types
+4. Convert durations from minutes to seconds (multiply by 60)
+5. Generate vehicle resources based on job count and constraints
+6. Create proper time windows and defaults where needed
+7. Validate the final structure
+
+## Output Format:
+Return a JSON object with this exact structure:
+{
+  "vrpData": { /* complete VRP request object */ },
+  "explanation": "Brief explanation of the conversion process",
+  "conversionNotes": ["Note about assumption 1", "Note about assumption 2"],
+  "rowsProcessed": number
+}
+
+Show your work step by step using Code Interpreter, then provide the final JSON result.`;
   }
 
   /**

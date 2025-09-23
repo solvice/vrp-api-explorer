@@ -16,8 +16,8 @@ describe('JsonModificationService', () => {
     mockOpenAIService = {
       modifyVrpData: jest.fn(),
       generateSuggestions: jest.fn(),
-      isConfigured: jest.fn().mockReturnValue(true),
-      getMaskedApiKey: jest.fn().mockReturnValue('sk-test***key'),
+      isConfigured: jest.fn().mockResolvedValue(true),
+      getConfigurationStatus: jest.fn().mockReturnValue('Server-side configured'),
     } as any
 
     service = new JsonModificationService(mockOpenAIService)
@@ -375,21 +375,21 @@ describe('JsonModificationService', () => {
   })
 
   describe('service configuration', () => {
-    it('should report correct configuration status', () => {
-      expect(service.isConfigured()).toBe(true)
-      
-      const status = service.getStatus()
+    it('should report correct configuration status', async () => {
+      expect(await service.isConfigured()).toBe(true)
+
+      const status = await service.getStatus()
       expect(status.configured).toBe(true)
-      expect(status.apiKey).toBe('sk-test***key')
+      expect(status.apiKey).toBe('Server-side configured')
     })
 
-    it('should handle unconfigured OpenAI service', () => {
-      mockOpenAIService.isConfigured.mockReturnValue(false)
-      mockOpenAIService.getMaskedApiKey.mockReturnValue('Not configured')
+    it('should handle unconfigured OpenAI service', async () => {
+      mockOpenAIService.isConfigured.mockResolvedValue(false)
+      mockOpenAIService.getConfigurationStatus.mockReturnValue('Not configured')
 
-      expect(service.isConfigured()).toBe(false)
-      
-      const status = service.getStatus()
+      expect(await service.isConfigured()).toBe(false)
+
+      const status = await service.getStatus()
       expect(status.configured).toBe(false)
       expect(status.apiKey).toBe('Not configured')
     })

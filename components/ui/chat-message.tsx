@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/collapsible"
 import { FilePreview } from "@/components/ui/file-preview"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
+import { CodeInterpreterLogs } from "@/components/VrpAssistant/CodeInterpreterLogs"
 
 const chatBubbleVariants = cva(
   "group/message relative break-words rounded-lg p-3 text-sm sm:max-w-[70%]",
@@ -122,6 +123,13 @@ type MessagePart =
   | FilePart
   | StepStartPart
 
+export interface ExecutionMetadata {
+  threadId: string
+  runId: string
+  stepCount: number
+  hasLogs: boolean
+}
+
 export interface Message {
   id: string
   role: "user" | "assistant" | (string & {})
@@ -130,6 +138,7 @@ export interface Message {
   experimental_attachments?: Attachment[]
   toolInvocations?: ToolInvocation[]
   parts?: MessagePart[]
+  executionMetadata?: ExecutionMetadata
 }
 
 export interface ChatMessageProps extends Message {
@@ -148,6 +157,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   experimental_attachments,
   toolInvocations,
   parts,
+  executionMetadata,
 }) => {
   const files = useMemo(() => {
     return experimental_attachments?.map((attachment) => {
@@ -261,6 +271,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </div>
         ) : null}
       </div>
+
+      {/* Show execution logs for assistant messages with Code Interpreter metadata */}
+      {!isUser && executionMetadata && (
+        <CodeInterpreterLogs
+          executionMetadata={executionMetadata}
+          className="w-full max-w-[70%]"
+        />
+      )}
 
       {showTimeStamp && createdAt ? (
         <time

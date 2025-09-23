@@ -60,8 +60,8 @@ importers:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       openai:
-        specifier: ^5.10.1
-        version: 5.10.1(ws@8.18.3)(zod@3.25.76)
+        specifier: ^5.22.1
+        version: 5.22.1(ws@8.18.3)(zod@3.25.76)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -92,6 +92,9 @@ importers:
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3
@@ -144,6 +147,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.8.3
+      whatwg-fetch:
+        specifier: ^3.6.20
+        version: 3.6.20
 
 packages:
 
@@ -3412,8 +3418,8 @@ packages:
   oniguruma-to-es@2.3.0:
     resolution: {integrity: sha512-bwALDxriqfKGfUufKGGepCzu9x7nJQuoRoAFp4AnwehhC2crqrDIAP/uN2qdlsAvSMpeRC3+Yzhqc7hLmle5+g==}
 
-  openai@5.10.1:
-    resolution: {integrity: sha512-fq6xVfv1/gpLbsj8fArEt3b6B9jBxdhAK+VJ+bDvbUvNd+KTLlA3bnDeYZaBsGH9LUhJ1M1yXfp9sEyBLMx6eA==}
+  openai@5.22.1:
+    resolution: {integrity: sha512-nzjcbqcSKxMAkTzNbtqKxrAq1jrG2txRshLZEflL3uZsgzGb22nVjbJscqTOSHGxbUWlYbISKHaUudA5Z1eutg==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -4188,6 +4194,9 @@ packages:
   whatwg-encoding@3.1.1:
     resolution: {integrity: sha512-6qN4hJdMwfYBtE3YBTTHhoeuUrDBPZmbQaxWAqSALV/MeEnR5z1xd8UKud2RAkFoPkmB+hli1TZSnyi84xz1vQ==}
     engines: {node: '>=18'}
+
+  whatwg-fetch@3.6.20:
+    resolution: {integrity: sha512-EqhiFU6daOA8kpjOWTL0olhVOF3i7OrFzSYiGsEMB8GcXS+RrzauAERX65xMeNWVqxA6HXH2m69Z9LaKKdisfg==}
 
   whatwg-mimetype@4.0.0:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
@@ -8211,7 +8220,7 @@ snapshots:
       regex: 5.1.1
       regex-recursion: 5.1.1
 
-  openai@5.10.1(ws@8.18.3)(zod@3.25.76):
+  openai@5.22.1(ws@8.18.3)(zod@3.25.76):
     optionalDependencies:
       ws: 8.18.3
       zod: 3.25.76
@@ -9183,6 +9192,8 @@ snapshots:
   whatwg-encoding@3.1.1:
     dependencies:
       iconv-lite: 0.6.3
+
+  whatwg-fetch@3.6.20: {}
 
   whatwg-mimetype@4.0.0: {}
 

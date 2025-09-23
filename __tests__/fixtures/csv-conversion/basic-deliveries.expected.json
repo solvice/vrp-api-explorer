@@ -1,0 +1,64 @@
+{
+  "vrpData": {
+    "jobs": [
+      {
+        "id": "job_1",
+        "name": "London Office",
+        "location": {
+          "latitude": 51.5074,
+          "longitude": 0.1278
+        },
+        "duration": 1800,
+        "priority": "high",
+        "demand": [100]
+      },
+      {
+        "id": "job_2",
+        "name": "Manchester Store",
+        "location": {
+          "latitude": 53.4808,
+          "longitude": -2.2426
+        },
+        "duration": 2700,
+        "priority": "medium",
+        "demand": [150]
+      },
+      {
+        "id": "job_3",
+        "name": "Birmingham Warehouse",
+        "location": {
+          "latitude": 52.4862,
+          "longitude": -1.8904
+        },
+        "duration": 1500,
+        "priority": "low",
+        "demand": [75]
+      }
+    ],
+    "resources": [
+      {
+        "id": "vehicle_1",
+        "capacity": [425],
+        "shifts": [
+          {
+            "start_location": {
+              "latitude": 51.5074,
+              "longitude": 0.1278
+            },
+            "end_location": {
+              "latitude": 51.5074,
+              "longitude": 0.1278
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "explanation": "Converted 3 locations to VRP jobs with duration conversion from minutes to seconds",
+  "conversionNotes": [
+    "Duration converted from minutes to seconds",
+    "Priority mapped to job priority field",
+    "Capacity needs mapped to demand array"
+  ],
+  "rowsProcessed": 3
+}
