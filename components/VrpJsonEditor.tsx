@@ -16,6 +16,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SAMPLE_DATASETS, SampleType, getSampleVrpData } from '@/lib/sample-data'
 import { cn } from '@/lib/utils'
+import { LoadJobButton } from '@/components/LoadJobButton'
+import { LoadJobDialog } from '@/components/LoadJobDialog'
+import { JobBadge } from '@/components/JobBadge'
 
 // Helper function to find differences between old and new JSON and highlight them
 function highlightChangesAndScroll(
@@ -109,6 +112,9 @@ interface VrpJsonEditorProps {
   onApiKeyChange?: (apiKey: string | null) => void
   currentSample?: SampleType
   onSampleChange?: (sample: SampleType) => void
+  loadedJobId?: string | null
+  onLoadJob?: (jobId: string) => Promise<void>
+  onClearJob?: () => void
 }
 
 // Inject CSS styles for AI change highlighting
@@ -174,7 +180,10 @@ function VrpJsonEditorContent({
   apiKeyStatus,
   onApiKeyChange,
   currentSample = 'simple',
-  onSampleChange
+  onSampleChange,
+  loadedJobId,
+  onLoadJob,
+  onClearJob
 }: VrpJsonEditorProps) {
   const { setVrpData, setOnVrpDataUpdate } = useVrpAssistant()
   const [validationResult, setValidationResult] = useState<ValidationResult>({ valid: true, errors: [] })
@@ -183,6 +192,9 @@ function VrpJsonEditorContent({
   const [jsonString, setJsonString] = useState(() => JSON.stringify(requestData, null, 2))
   const [parseError, setParseError] = useState<string | null>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+
+  // Job loading dialog state
+  const [isLoadJobDialogOpen, setIsLoadJobDialogOpen] = useState(false)
 
   // Inject CSS styles for AI highlighting on mount
   useEffect(() => {
@@ -538,6 +550,14 @@ function VrpJsonEditorContent({
                   </PopoverContent>
                 </Popover>
               )}
+
+              {/* Load Job Button */}
+              {onLoadJob && (
+                <LoadJobButton
+                  onClick={() => setIsLoadJobDialogOpen(true)}
+                  disabled={isLoading}
+                />
+              )}
             </div>
 
             {/* Right side: Send Button */}
@@ -567,6 +587,12 @@ function VrpJsonEditorContent({
         <div className="flex items-center justify-between p-3 border-b bg-muted/50 relative">
           <div className="flex items-center space-x-3">
             <h3 className="text-sm font-medium">Request</h3>
+            {loadedJobId && onClearJob && (
+              <JobBadge
+                jobId={loadedJobId}
+                onClear={onClearJob}
+              />
+            )}
             <Select value={currentSample} onValueChange={handleSampleChange}>
               <SelectTrigger className="w-[300px] h-7 text-xs">
                 <SelectValue>
@@ -674,7 +700,20 @@ function VrpJsonEditorContent({
     </div>
   )
 
-  return editorContent
+  return (
+    <>
+      {editorContent}
+
+      {/* Load Job Dialog */}
+      {onLoadJob && (
+        <LoadJobDialog
+          open={isLoadJobDialogOpen}
+          onOpenChange={setIsLoadJobDialogOpen}
+          onLoadJob={onLoadJob}
+        />
+      )}
+    </>
+  )
 }
 
 export function VrpJsonEditor(props: VrpJsonEditorProps) {

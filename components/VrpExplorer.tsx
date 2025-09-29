@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
 import { VrpMap } from './VrpMap'
@@ -19,10 +20,17 @@ export function VrpExplorer() {
   const [isLoading, setIsLoading] = useState(false)
   const [validationResult, setValidationResult] = useState<ValidationResult>({ valid: true, errors: [] })
   // API status - always configured since keys are server-side
-  const [apiKeyStatus] = useState<{ type: 'demo' | 'user', masked: string }>({ 
-    type: 'user', 
-    masked: 'Configured (Server-side)' 
+  const [apiKeyStatus] = useState<{ type: 'demo' | 'user', masked: string }>({
+    type: 'user',
+    masked: 'Configured (Server-side)'
   })
+
+  // Job loading state
+  const [loadedJobId, setLoadedJobId] = useState<string | null>(null)
+
+  // URL parameter handling
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
   // Handle API key changes - now just a placeholder since keys are server-side
   const handleApiKeyChange = useCallback(async () => {
@@ -128,6 +136,61 @@ export function VrpExplorer() {
     setResponseData(null)
   }, [])
 
+  // Handle job loading
+  const handleLoadJob = useCallback(async (jobId: string) => {
+    try {
+      const response = await fetch(`/api/vrp/load/${jobId}`)
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to load job')
+      }
+
+      const result = await response.json()
+
+      // Replace request data
+      if (result.request) {
+        setRequestData(result.request)
+        setResponseData(null) // Clear any existing solution
+      }
+
+      // Load solution if available
+      if (result.solution) {
+        setResponseData(result.solution)
+      } else if (result.solutionError) {
+        toast.info(result.solutionError)
+      }
+
+      // Update URL and state
+      setLoadedJobId(jobId)
+      router.push(`/?run=${jobId}`, { scroll: false })
+
+      toast.success('Job loaded successfully!')
+    } catch (error) {
+      throw error // Re-throw for dialog error handling
+    }
+  }, [router])
+
+  // Handle clearing loaded job
+  const handleClearJob = useCallback(() => {
+    setLoadedJobId(null)
+    router.push('/', { scroll: false })
+    toast.info('Cleared loaded job')
+  }, [router])
+
+  // Auto-load job from URL parameter
+  useEffect(() => {
+    const runParam = searchParams.get('run')
+    if (runParam && runParam !== loadedJobId) {
+      handleLoadJob(runParam).catch(error => {
+        console.error('Failed to auto-load job:', error)
+        toast.error('Failed to load job from URL')
+        // Clear invalid URL parameter
+        router.push('/', { scroll: false })
+      })
+    }
+  }, [searchParams, loadedJobId, handleLoadJob, router])
+
 
   return (
     <>
@@ -145,6 +208,9 @@ export function VrpExplorer() {
             onApiKeyChange={handleApiKeyChange}
             currentSample={currentSample}
             onSampleChange={handleSampleChange}
+            loadedJobId={loadedJobId}
+            onLoadJob={handleLoadJob}
+            onClearJob={handleClearJob}
           />
         }
         centerPanel={
