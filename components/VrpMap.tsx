@@ -581,12 +581,25 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
       }
 
       if (routeGeometry) {
-        // Remove existing source if it exists
+        // Remove existing layers first (before removing source)
+        const layersToRemove = [shadowId, lineId]
+
+        for (const layerId of layersToRemove) {
+          if (map.current!.getLayer(layerId)) {
+            try {
+              map.current!.removeLayer(layerId)
+            } catch {
+              // Layer might not exist
+            }
+          }
+        }
+
+        // Now remove existing source if it exists
         if (map.current!.getSource(routeId)) {
           try {
             map.current!.removeSource(routeId)
           } catch {
-            // Source might be in use by layers
+            // Source might still be in use
           }
         }
 
@@ -606,19 +619,6 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
             geometry: routeGeometry
           }
         })
-
-        // Remove existing layers if they exist
-        const layersToRemove = [shadowId, lineId]
-        
-        for (const layerId of layersToRemove) {
-          if (map.current!.getLayer(layerId)) {
-            try {
-              map.current!.removeLayer(layerId)
-            } catch {
-              // Layer might not exist
-            }
-          }
-        }
 
         // Add route shadow for better visibility
         map.current!.addLayer({
