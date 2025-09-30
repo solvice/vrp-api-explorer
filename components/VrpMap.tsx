@@ -5,10 +5,13 @@ import maplibregl from 'maplibre-gl'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { Loader2, Layers3, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { decodePolyline, isEncodedPolyline } from '@/lib/polyline-decoder'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { MapMarkerManager } from '@/lib/map-marker-manager'
+import { MapRouteRenderer } from '@/lib/map-route-renderer'
+import { createResourceColorMap } from '@/lib/color-utils'
+import { useMapStyle } from '@/lib/hooks/useMapStyle'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 interface VrpMapProps {
@@ -19,78 +22,38 @@ interface VrpMapProps {
   onJobHover?: (job: { resource: string; job: string } | null) => void
 }
 
-// Route colors for different vehicles
-const ROUTE_COLORS = [
-  '#3B82F6', // blue
-  '#EF4444', // red  
-  '#10B981', // emerald
-  '#F59E0B', // amber
-  '#8B5CF6', // violet
-  '#EC4899', // pink
-  '#06B6D4', // cyan
-  '#84CC16'  // lime
-]
-
-// Map style configurations
-const MAP_STYLES = [
-  { id: 'white', name: 'White', url: 'https://cdn.solvice.io/styles/white.json', preview: '#ffffff' },
-  { id: 'light', name: 'Light', url: 'https://cdn.solvice.io/styles/light.json', preview: '#f8fafc' },
-  { id: 'gray', name: 'Gray', url: 'https://cdn.solvice.io/styles/grayscale.json', preview: '#9ca3af' },
-  { id: 'dark', name: 'Dark', url: 'https://cdn.solvice.io/styles/dark.json', preview: '#374151' },
-  { id: 'black', name: 'Black', url: 'https://cdn.solvice.io/styles/black.json', preview: '#111827' }
-] as const
-
-type MapStyleId = typeof MAP_STYLES[number]['id']
-
-// Retrieve saved style from localStorage or default to white
-const getSavedMapStyle = (): MapStyleId => {
-  if (typeof window === 'undefined') return 'white'
-  try {
-    const saved = localStorage.getItem('vrp-map-style') as MapStyleId
-    return MAP_STYLES.find(s => s.id === saved) ? saved : 'white'
-  } catch {
-    return 'white'
-  }
-}
-
-// Save map style to localStorage
-const saveMapStyle = (styleId: MapStyleId) => {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem('vrp-map-style', styleId)
-  } catch {
-    // Ignore localStorage errors
-  }
-}
-
 export function VrpMap({ requestData, responseData, className, highlightedJob, onJobHover }: VrpMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
-  const markers = useRef<maplibregl.Marker[]>([])
-  const markerMetadata = useRef<Map<maplibregl.Marker, { resource: string; job: string }>>(new Map())
+  const markerManager = useRef<MapMarkerManager>(new MapMarkerManager())
+  const routeRenderer = useRef<MapRouteRenderer | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [currentStyle, setCurrentStyle] = useState<MapStyleId>(getSavedMapStyle)
-  const [isStyleChanging, setIsStyleChanging] = useState(false)
   const [isStyleSwitcherOpen, setIsStyleSwitcherOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
 
-  // Prevent hydration mismatch by only rendering style-dependent UI after mount
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // Use map style hook
+  const { currentStyle, isStyleChanging, mounted, switchMapStyle, MAP_STYLES } = useMapStyle({
+    map: map.current,
+    onStyleChange: () => {
+      // Re-render data after style change
+      renderMapData()
+    }
+  })
 
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return
 
     const selectedStyle = MAP_STYLES.find(s => s.id === currentStyle) || MAP_STYLES[0]
-    
+
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: selectedStyle.url,
       center: [3.7250, 51.0538], // Ghent center
       zoom: 11
     })
+
+    // Initialize route renderer
+    routeRenderer.current = new MapRouteRenderer(map.current)
 
     // Add navigation controls with both zoom and compass disabled
     map.current.addControl(new maplibregl.NavigationControl({ showZoom: false, showCompass: false }), 'top-right')
@@ -100,9 +63,8 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
       setIsLoading(false)
     })
 
-    // Handle style changes (important for external styles like Solvice)
+    // Handle style changes
     map.current.on('styledata', () => {
-      // Trigger a re-render of data when style loads
       setIsLoading(false)
     })
 
@@ -112,397 +74,110 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
         map.current = null
       }
     }
-  }, [currentStyle])
+  }, [currentStyle, MAP_STYLES])
 
-  // Clear existing markers
-  const clearMarkers = () => {
-    markers.current.forEach(marker => marker.remove())
-    markers.current = []
-    markerMetadata.current.clear()
-  }
+  // Render map data (markers and routes)
+  const renderMapData = useCallback(() => {
+    if (!map.current || !map.current.isStyleLoaded()) {
+      console.log('⏳ VrpMap: Style not loaded yet, waiting...')
+      return
+    }
 
-  // Create marker element with custom styling and hover interactions
-  const createMarkerElement = useCallback((
-    type: 'job' | 'resource',
-    name: string,
-    sequence?: number,
-    visit?: Record<string, unknown>,
-    vehicleColor?: string,
-    resourceName?: string
-  ) => {
-    const el = document.createElement('div')
-    el.className = `${type}-marker cursor-pointer relative`
+    console.log('🗺️ VrpMap: Rendering data', {
+      hasRequestData: !!requestData,
+      hasResponseData: !!responseData
+    })
 
-    if (type === 'job') {
-      const markerColor = vehicleColor || '#3B82F6'
-      el.innerHTML = `
-        <div class="marker-icon flex items-center justify-center w-8 h-8 text-white rounded-full border-2 border-white shadow-lg text-xs font-bold transition-all hover:scale-110" style="background-color: ${markerColor}">
-          ${sequence || '•'}
-        </div>
-        <div class="marker-tooltip absolute top-full left-1/2 transform -translate-x-1/2 mt-1 px-3 py-2 bg-white rounded-lg shadow-lg border text-xs whitespace-nowrap opacity-0 invisible transition-all duration-200 z-10 pointer-events-none">
-          <div class="font-semibold text-gray-900">${name}</div>
-          ${sequence ? `<div class="text-gray-600">Visit #${sequence}</div>` : ''}
-          ${visit?.arrival && typeof visit.arrival === 'string' ? `<div class="text-gray-600">Arrival: ${new Date(visit.arrival).toLocaleTimeString()}</div>` : ''}
-          ${visit?.arrival && typeof visit.arrival === 'string' && visit?.serviceTime && typeof visit.serviceTime === 'number' ? `<div class="text-gray-600">Departure: ${new Date(new Date(visit.arrival).getTime() + visit.serviceTime * 1000).toLocaleTimeString()}</div>` : ''}
-          <div class="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-white border-l border-t rotate-45"></div>
-        </div>
-      `
+    // Clear existing visualizations
+    markerManager.current.clear()
+    routeRenderer.current?.clear()
+
+    if (responseData) {
+      // Render solution data (routes + numbered markers)
+      console.log('🗺️ VrpMap: Rendering solution data')
+
+      const resourceColors = createResourceColorMap(responseData.trips)
+      const bounds = new maplibregl.LngLatBounds()
+
+      // Add resource markers
+      const resources = requestData.resources as Array<{
+        name?: string
+        shifts?: Array<{ start?: { longitude: number; latitude: number } }>
+      }> | undefined
+
+      markerManager.current.addResourceMarkers(resources, map.current, bounds, onJobHover)
+
+      // Add job markers with sequence numbers
+      const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
+      markerManager.current.addJobMarkers(
+        responseData.trips,
+        jobs,
+        resourceColors,
+        map.current,
+        bounds,
+        onJobHover
+      )
+
+      // Fit map to bounds
+      if (!bounds.isEmpty()) {
+        map.current.fitBounds(bounds, { padding: 50 })
+      }
+
+      // Render routes
+      routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors)
+
     } else {
-      el.innerHTML = `
-        <div class="marker-icon flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full border-2 border-white shadow-lg transition-transform hover:scale-110">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
-          </svg>
-        </div>
-        <div class="marker-tooltip absolute top-full left-1/2 transform -translate-x-1/2 mt-1 px-3 py-2 bg-white rounded-lg shadow-lg border text-xs whitespace-nowrap opacity-0 invisible transition-all duration-200 z-10 pointer-events-none">
-          <div class="font-semibold text-gray-900">${name}</div>
-          <div class="text-gray-600">Vehicle Depot</div>
-          <div class="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-white border-l border-t rotate-45"></div>
-        </div>
-      `
+      // Render request data only (markers without routes)
+      console.log('🗺️ VrpMap: Rendering request data only')
+
+      const bounds = new maplibregl.LngLatBounds()
+
+      // Add resource markers
+      const resources = requestData.resources as Array<Record<string, unknown>> | undefined
+      const resourcesTyped = resources as Array<{
+        name?: string
+        shifts?: Array<{ start?: { longitude: number; latitude: number } }>
+      }> | undefined
+
+      markerManager.current.addResourceMarkers(resourcesTyped, map.current, bounds, onJobHover)
+
+      // Add simple job markers
+      const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
+      markerManager.current.addSimpleJobMarkers(jobs, map.current, bounds, onJobHover)
+
+      // Fit map to bounds
+      if (!bounds.isEmpty()) {
+        map.current.fitBounds(bounds, { padding: 50 })
+      }
+    }
+  }, [requestData, responseData, onJobHover])
+
+  // Update map when data changes
+  useEffect(() => {
+    if (!map.current) return
+
+    console.log('🗺️ VrpMap: Data changed, updating...')
+
+    // Check if style is loaded
+    if (!map.current.isStyleLoaded()) {
+      console.log('⏳ VrpMap: Waiting for style to load')
+      const handleStyleLoad = () => {
+        console.log('✅ VrpMap: Style loaded, rendering data')
+        renderMapData()
+      }
+      map.current.once('styledata', handleStyleLoad)
+      return
     }
 
-    // Add hover interactions
-    el.addEventListener('mouseenter', () => {
-      const tooltip = el.querySelector('.marker-tooltip')
-      if (tooltip) {
-        tooltip.classList.remove('opacity-0', 'invisible')
-        tooltip.classList.add('opacity-100', 'visible')
-      }
-      // Notify parent of hover if this is a job marker with resource
-      if (type === 'job' && resourceName && onJobHover) {
-        onJobHover({ resource: resourceName, job: name })
-      }
-    })
-
-    el.addEventListener('mouseleave', () => {
-      const tooltip = el.querySelector('.marker-tooltip')
-      if (tooltip) {
-        tooltip.classList.remove('opacity-100', 'visible')
-        tooltip.classList.add('opacity-0', 'invisible')
-      }
-      // Clear hover state
-      if (type === 'job' && onJobHover) {
-        onJobHover(null)
-      }
-    })
-
-    return el
-  }, [onJobHover])
-
-  // Switch map style
-  const switchMapStyle = useCallback((styleId: MapStyleId) => {
-    if (!map.current || isStyleChanging || styleId === currentStyle) return
-    
-    const newStyle = MAP_STYLES.find(s => s.id === styleId)
-    if (!newStyle) return
-
-    setIsStyleChanging(true)
-    setCurrentStyle(styleId)
-    saveMapStyle(styleId)
-    setIsStyleSwitcherOpen(false)
-
-    // Store current map state
-    const currentCenter = map.current.getCenter()
-    const currentZoom = map.current.getZoom()
-    const currentBearing = map.current.getBearing()
-    const currentPitch = map.current.getPitch()
-
-    // Set new style
-    map.current.setStyle(newStyle.url)
-
-    // Handle style load completion
-    const handleStyleLoad = () => {
-      if (!map.current) return
-      
-      // Restore map state
-      map.current.jumpTo({
-        center: currentCenter,
-        zoom: currentZoom,
-        bearing: currentBearing,
-        pitch: currentPitch
-      })
-
-      setIsStyleChanging(false)
-      
-      // Re-apply routes and markers after style loads
-      setTimeout(() => {
-        if (!map.current) return
-        
-        if (responseData) {
-          // Re-apply solution data (routes + numbered markers)
-          clearMarkers()
-
-          // Create resource-to-color mapping (same as VrpGantt for consistency)
-          const resourceColors = new Map<string, string>()
-          const uniqueResources = Array.from(new Set(responseData.trips?.map(t => t.resource).filter((r): r is string => r !== null && r !== undefined) || []))
-          uniqueResources.forEach((resource, idx) => {
-            resourceColors.set(resource, ROUTE_COLORS[idx % ROUTE_COLORS.length])
-          })
-
-          // Add resource markers (depots)
-          const resources = requestData.resources as Array<{ name?: string; shifts?: Array<{ start?: { longitude: number; latitude: number } }> }> | undefined
-          resources?.forEach((resource) => {
-            resource.shifts?.forEach((shift) => {
-              if (shift.start) {
-                const el = createMarkerElement('resource', resource.name || 'Resource')
-                const marker = new maplibregl.Marker({ element: el })
-                  .setLngLat([shift.start.longitude, shift.start.latitude])
-                  .addTo(map.current!)
-                markers.current.push(marker)
-              }
-            })
-          })
-
-          // Add job markers with sequence numbers and vehicle colors
-          responseData.trips?.forEach((trip) => {
-            const resourceName = trip.resource || 'Unknown'
-            const vehicleColor = resourceColors.get(resourceName) || ROUTE_COLORS[0]
-
-            trip.visits?.forEach((visit, visitIndex) => {
-              const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-              const job = jobs?.find((j) => j.name === visit.job)
-              if (job?.location && typeof job.location === 'object' && job.location !== null) {
-                const location = job.location as { longitude?: number; latitude?: number }
-                if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                  const jobName = typeof job.name === 'string' ? job.name : 'Job'
-                  const el = createMarkerElement('job', jobName, visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor, resourceName)
-                  const marker = new maplibregl.Marker({ element: el })
-                    .setLngLat([location.longitude, location.latitude])
-                    .addTo(map.current!)
-                  markers.current.push(marker)
-                  markerMetadata.current.set(marker, { resource: resourceName, job: jobName })
-                }
-              }
-            })
-          })
-          
-          // Re-apply route visualization 
-          clearRoutes()
-          responseData.trips?.forEach((trip, tripIndex) => {
-            const color = ROUTE_COLORS[tripIndex % ROUTE_COLORS.length]
-            const routeId = `route-${tripIndex}`
-            const lineId = `line-${tripIndex}`
-            const shadowId = `shadow-${tripIndex}`
-
-            // Create route geometry (simplified version)
-            let routeGeometry: GeoJSON.LineString | null = null
-            
-            console.log(`🗺️ VrpMap: Checking polyline for trip ${tripIndex}:`, {
-              hasPolyline: !!trip.polyline,
-              polylineType: typeof trip.polyline,
-              polylineLength: trip.polyline?.length,
-              polylinePreview: trip.polyline?.substring(0, 20)
-            })
-
-            if (trip.polyline && typeof trip.polyline === 'string') {
-              try {
-                if (isEncodedPolyline(trip.polyline)) {
-                  console.log(`🗺️ VrpMap: Decoding polyline for trip ${tripIndex}`)
-                  const coordinates = decodePolyline(trip.polyline)
-                  if (coordinates.length > 0) {
-                    console.log(`✅ VrpMap: Successfully decoded ${coordinates.length} coordinates from polyline`)
-                    routeGeometry = {
-                      type: 'LineString',
-                      coordinates
-                    }
-                  }
-                } else {
-                  console.log(`❌ VrpMap: Polyline failed validation for trip ${tripIndex}`)
-                }
-              } catch (error) {
-                console.warn(`Failed to decode polyline for trip ${tripIndex}:`, error)
-              }
-            } else {
-              console.log(`❌ VrpMap: No valid polyline found for trip ${tripIndex}`)
-            }
-            
-            if (!routeGeometry) {
-              // Fallback: create route coordinates from visits
-              const coordinates: [number, number][] = []
-              
-              const resources = requestData.resources as Array<Record<string, unknown>> | undefined
-              const resource = resources?.find((r) => r.name === trip.resource)
-              const shifts = resource?.shifts as Array<Record<string, unknown>> | undefined
-              const startLocation = shifts?.[0]?.start
-              
-              if (startLocation && typeof startLocation === 'object' && startLocation !== null) {
-                const location = startLocation as { longitude?: number; latitude?: number }
-                if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                  coordinates.push([location.longitude, location.latitude])
-                }
-              }
-              
-              trip.visits?.forEach((visit) => {
-                const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-                const job = jobs?.find((j) => j.name === visit.job)
-                if (job?.location && typeof job.location === 'object' && job.location !== null) {
-                  const location = job.location as { longitude?: number; latitude?: number }
-                  if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                    coordinates.push([location.longitude, location.latitude])
-                  }
-                }
-              })
-
-              const endLocation = shifts?.[0]?.end || startLocation
-              if (endLocation && typeof endLocation === 'object' && endLocation !== null && coordinates.length > 1) {
-                const location = endLocation as { longitude?: number; latitude?: number }
-                if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                  coordinates.push([location.longitude, location.latitude])
-                }
-              }
-              
-              if (coordinates.length > 1) {
-                routeGeometry = {
-                  type: 'LineString',
-                  coordinates
-                }
-              }
-            }
-
-            if (routeGeometry && map.current?.isStyleLoaded()) {
-              // Add route source
-              map.current.addSource(routeId, {
-                type: 'geojson',
-                data: {
-                  type: 'Feature',
-                  properties: {
-                    resourceName: trip.resource,
-                    tripIndex,
-                    visitCount: trip.visits?.length || 0
-                  },
-                  geometry: routeGeometry
-                }
-              })
-
-              // Add route layers
-              map.current.addLayer({
-                id: shadowId,
-                type: 'line',
-                source: routeId,
-                layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': '#000000', 'line-width': 6, 'line-opacity': 0.2 }
-              })
-
-              map.current.addLayer({
-                id: lineId,
-                type: 'line',
-                source: routeId,
-                layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': color, 'line-width': 4, 'line-opacity': 0.9 }
-              })
-            }
-          })
-        } else if (requestData) {
-          // Re-apply request data (markers only)
-          clearMarkers()
-          
-          const bounds = new maplibregl.LngLatBounds()
-
-          // Add resource markers
-          const resources = requestData.resources as Array<Record<string, unknown>> | undefined
-          resources?.forEach((resource) => {
-            const shifts = resource.shifts as Array<Record<string, unknown>> | undefined
-            shifts?.forEach((shift) => {
-              if (shift.start && typeof shift.start === 'object' && shift.start !== null) {
-                const location = shift.start as { longitude?: number; latitude?: number }
-                if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                  const el = createMarkerElement('resource', typeof resource.name === 'string' ? resource.name : 'Resource')
-                  const marker = new maplibregl.Marker({ element: el })
-                    .setLngLat([location.longitude, location.latitude])
-                    .addTo(map.current!)
-                  markers.current.push(marker)
-                  bounds.extend([location.longitude, location.latitude])
-                }
-              }
-            })
-          })
-
-          // Add job markers
-          const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-          jobs?.forEach((job) => {
-            if (job.location && typeof job.location === 'object' && job.location !== null) {
-              const location = job.location as { longitude?: number; latitude?: number }
-              if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                const el = createMarkerElement('job', typeof job.name === 'string' ? job.name : 'Job')
-                const marker = new maplibregl.Marker({ element: el })
-                  .setLngLat([location.longitude, location.latitude])
-                  .addTo(map.current!)
-                markers.current.push(marker)
-                bounds.extend([location.longitude, location.latitude])
-              }
-            }
-          })
-        }
-      }, 100) // Small delay to ensure style is fully loaded
-      
-      // Remove event listener
-      map.current.off('styledata', handleStyleLoad)
-    }
-
-    map.current.on('styledata', handleStyleLoad)
-  }, [currentStyle, isStyleChanging, requestData, responseData, createMarkerElement])
+    renderMapData()
+  }, [requestData, responseData, renderMapData])
 
   // Handle highlighting when highlightedJob changes
   useEffect(() => {
-    markerMetadata.current.forEach((metadata, marker) => {
-      const el = marker.getElement()
-      const icon = el.querySelector('.marker-icon')
-      if (!icon) return
-
-      const isHighlighted = highlightedJob &&
-        metadata.resource === highlightedJob.resource &&
-        metadata.job === highlightedJob.job
-
-      if (isHighlighted) {
-        icon.classList.add('scale-125', 'ring-4', 'ring-white', 'ring-opacity-75')
-      } else if (highlightedJob) {
-        icon.classList.add('opacity-40')
-        icon.classList.remove('scale-125', 'ring-4', 'ring-white', 'ring-opacity-75')
-      } else {
-        icon.classList.remove('opacity-40', 'scale-125', 'ring-4', 'ring-white', 'ring-opacity-75')
-      }
-    })
+    markerManager.current.updateHighlighting(highlightedJob)
   }, [highlightedJob])
 
-  // Clear route visualization
-  const clearRoutes = () => {
-    if (!map.current) return
-
-    console.log('🧹 VrpMap: clearRoutes called')
-
-    // Remove event listeners first
-    const style = map.current.getStyle()
-    style.layers?.forEach(layer => {
-      if (layer.id.startsWith('line-')) {
-        // Event listeners will be automatically cleaned when layers are removed
-      }
-    })
-
-    // Remove existing route layers and sources
-    style.layers?.forEach(layer => {
-      if (layer.id.startsWith('line-') || layer.id.startsWith('shadow-')) {
-        try {
-          console.log(`  Removing layer: ${layer.id}`)
-          map.current!.removeLayer(layer.id)
-        } catch {
-          // Layer might already be removed
-        }
-      }
-    })
-
-    Object.keys(style.sources || {}).forEach(sourceId => {
-      if (sourceId.startsWith('route-')) {
-        try {
-          map.current!.removeSource(sourceId)
-        } catch {
-          // Source might already be removed
-        }
-      }
-    })
-  }
-
-  // Create style switcher component
+  // Style switcher component
   const StyleSwitcher = () => {
     const currentStyleObj = MAP_STYLES.find(s => s.id === currentStyle) || MAP_STYLES[0]
 
@@ -547,7 +222,10 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
                   variant={currentStyle === style.id ? "secondary" : "ghost"}
                   size="sm"
                   className="w-full justify-start h-8 px-2"
-                  onClick={() => switchMapStyle(style.id)}
+                  onClick={() => {
+                    switchMapStyle(style.id)
+                    setIsStyleSwitcherOpen(false)
+                  }}
                   disabled={isStyleChanging}
                 >
                   <div className="flex items-center space-x-2">
@@ -568,344 +246,6 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
       </div>
     )
   }
-
-  // Update map when data changes
-  useEffect(() => {
-    if (!map.current) return
-
-    console.log('🗺️ VrpMap: Map updating due to data change...', {
-      hasRequestData: !!requestData,
-      hasResponseData: !!responseData,
-      jobCount: Array.isArray((requestData as Record<string, unknown>)?.jobs) ? ((requestData as Record<string, unknown>).jobs as unknown[]).length : 0,
-      resourceCount: Array.isArray((requestData as Record<string, unknown>)?.resources) ? ((requestData as Record<string, unknown>).resources as unknown[]).length : 0,
-      isLoading,
-      isStyleLoaded: map.current.isStyleLoaded()
-    })
-
-    // Check if style is loaded before proceeding
-    if (!map.current.isStyleLoaded()) {
-      console.log('⏳ VrpMap: Style not loaded yet, waiting for styledata event')
-      // Wait for style to load, then render
-      const handleStyleLoad = () => {
-        if (!map.current) return
-        console.log('✅ VrpMap: Style loaded, rendering data now')
-        renderMapData()
-      }
-      map.current.once('styledata', handleStyleLoad)
-      return
-    }
-
-    renderMapData()
-
-    function renderMapData() {
-      if (!map.current) return
-
-      clearRoutes()
-
-      if (responseData) {
-        console.log('🗺️ VrpMap: Rendering solution data (routes + markers)')
-
-        // Clear existing markers
-        clearMarkers()
-
-        // Create resource-to-color mapping (same as VrpGantt for consistency)
-        const resourceColors = new Map<string, string>()
-        const uniqueResources = Array.from(new Set(responseData.trips?.map(t => t.resource).filter((r): r is string => r !== null && r !== undefined) || []))
-        uniqueResources.forEach((resource, idx) => {
-          resourceColors.set(resource, ROUTE_COLORS[idx % ROUTE_COLORS.length])
-        })
-
-        // Create bounds for fitting map view
-        const boundsCoords = [] as Array<[number, number]>
-
-        // Add resource markers (from shift start locations in SDK 0.6.0)
-        (requestData.resources as Array<{ name?: string; shifts?: Array<{ start?: { longitude: number; latitude: number } }> }> | undefined)?.forEach((resource) => {
-          resource.shifts?.forEach((shift) => {
-            if (shift.start) {
-              const el = createMarkerElement('resource', resource.name || 'Resource')
-              const marker = new maplibregl.Marker({ element: el })
-                .setLngLat([shift.start.longitude, shift.start.latitude])
-                .addTo(map.current!)
-
-              markers.current.push(marker)
-              boundsCoords.push([shift.start.longitude, shift.start.latitude])
-            }
-          })
-        })
-
-        // Add job markers with sequence numbers and vehicle colors
-        responseData.trips?.forEach((trip) => {
-          const resourceName = trip.resource || 'Unknown'
-          const vehicleColor = resourceColors.get(resourceName) || ROUTE_COLORS[0]
-
-          trip.visits?.forEach((visit, visitIndex) => {
-            const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-            const job = jobs?.find((j) => j.name === visit.job)
-            if (job?.location && typeof job.location === 'object' && job.location !== null) {
-              const location = job.location as { longitude?: number; latitude?: number }
-              if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                const jobName = typeof job.name === 'string' ? job.name : 'Job'
-                const el = createMarkerElement('job', jobName, visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor, resourceName)
-                const marker = new maplibregl.Marker({ element: el })
-                  .setLngLat([location.longitude, location.latitude])
-                  .addTo(map.current!)
-
-                markers.current.push(marker)
-                markerMetadata.current.set(marker, { resource: resourceName, job: jobName })
-                boundsCoords.push([location.longitude, location.latitude])
-              }
-            }
-          })
-        })
-
-        // Fit map to bounds if we have markers
-        if (boundsCoords.length > 0) {
-          const bounds = new maplibregl.LngLatBounds()
-          boundsCoords.forEach(coord => bounds.extend(coord))
-          map.current!.fitBounds(bounds, { padding: 50 })
-        }
-
-        // Add route visualization
-        const trips = responseData.trips
-        if (!trips || !Array.isArray(trips)) {
-          console.warn('No valid trips data found in response')
-          return
-        }
-
-        trips.forEach((trip, tripIndex) => {
-          const resourceName = trip.resource || 'Unknown'
-          const color = resourceColors.get(resourceName) || ROUTE_COLORS[0]
-          const routeId = `route-${tripIndex}`
-          const lineId = `line-${tripIndex}`
-          const shadowId = `shadow-${tripIndex}`
-
-          // Use actual route geometry if available (from polyline option), otherwise fallback to straight lines
-          let routeGeometry: GeoJSON.LineString | null = null
-
-          if (trip.polyline && typeof trip.polyline === 'string') {
-            try {
-              if (isEncodedPolyline(trip.polyline)) {
-                console.log(`🗺️ Decoding polyline for trip ${tripIndex}:`, trip.polyline.substring(0, 50) + '...')
-                const coordinates = decodePolyline(trip.polyline)
-                if (coordinates.length > 0) {
-                  routeGeometry = {
-                    type: 'LineString',
-                    coordinates
-                  }
-                  console.log(`✅ Successfully decoded ${coordinates.length} polyline coordinates`)
-                }
-              }
-            } catch (error) {
-              console.warn(`⚠️ Failed to decode polyline for trip ${tripIndex}:`, error)
-            }
-          }
-
-          if (!routeGeometry) {
-            // Fallback: create route coordinates from visits, including depot start/end
-            const coordinates: [number, number][] = []
-
-            // Find the vehicle/resource for this trip
-            const resources = requestData.resources as Array<Record<string, unknown>> | undefined
-            const resource = resources?.find((r) => r.name === trip.resource)
-
-            // Start from depot if available (from shift start in SDK 0.6.0)
-            const shifts = resource?.shifts as Array<Record<string, unknown>> | undefined
-            const startLocation = shifts?.[0]?.start
-            if (startLocation && typeof startLocation === 'object' && startLocation !== null) {
-              const location = startLocation as { longitude?: number; latitude?: number }
-              if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                coordinates.push([location.longitude, location.latitude])
-              }
-            }
-
-            // Add visit locations (they're already in sequence order from API)
-            trip.visits?.forEach((visit) => {
-              const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-              const job = jobs?.find((j) => j.name === visit.job)
-              if (job?.location && typeof job.location === 'object' && job.location !== null) {
-                const location = job.location as { longitude?: number; latitude?: number }
-                if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                  coordinates.push([location.longitude, location.latitude])
-                }
-              }
-            })
-
-            // Return to depot if available and we have visits (use end location if available, fallback to start)
-            const endLocation = shifts?.[0]?.end || startLocation
-            if (endLocation && typeof endLocation === 'object' && endLocation !== null && coordinates.length > 1) {
-              const location = endLocation as { longitude?: number; latitude?: number }
-              if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                coordinates.push([location.longitude, location.latitude])
-              }
-            }
-
-            if (coordinates.length > 1) {
-              routeGeometry = {
-                type: 'LineString',
-                coordinates
-              }
-            }
-          }
-
-          if (routeGeometry) {
-            // Remove existing layers first (before removing source)
-            const layersToRemove = [shadowId, lineId]
-
-            for (const layerId of layersToRemove) {
-              if (map.current!.getLayer(layerId)) {
-                try {
-                  map.current!.removeLayer(layerId)
-                } catch {
-                  // Layer might not exist
-                }
-              }
-            }
-
-            // Now remove existing source if it exists
-            if (map.current!.getSource(routeId)) {
-              try {
-                map.current!.removeSource(routeId)
-              } catch {
-                // Source might still be in use
-              }
-            }
-
-            // Add route source with trip metadata
-            map.current!.addSource(routeId, {
-              type: 'geojson',
-              data: {
-                type: 'Feature',
-                properties: {
-                  resourceName: trip.resource,
-                  tripIndex,
-                  visitCount: trip.visits?.length || 0,
-                  hasPolyline: !!trip.polyline,
-                  isActualRoute: !!trip.polyline && routeGeometry?.coordinates?.length > 2,
-                  coordinateCount: routeGeometry?.coordinates?.length || 0
-                },
-                geometry: routeGeometry
-              }
-            })
-
-            // Add route shadow for better visibility
-            map.current!.addLayer({
-              id: shadowId,
-              type: 'line',
-              source: routeId,
-              layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-              },
-              paint: {
-                'line-color': '#000000',
-                'line-width': 6,
-                'line-opacity': 0.2
-              }
-            })
-
-            // Add main route layer
-            map.current!.addLayer({
-              id: lineId,
-              type: 'line',
-              source: routeId,
-              layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-              },
-              paint: {
-                'line-color': color,
-                'line-width': 4,
-                'line-opacity': 0.9
-              }
-            })
-
-            // Add route hover effects
-            map.current!.on('mouseenter', lineId, () => {
-              map.current!.setPaintProperty(lineId, 'line-width', 6)
-              map.current!.setPaintProperty(lineId, 'line-opacity', 1)
-              map.current!.getCanvas().style.cursor = 'pointer'
-            })
-
-            map.current!.on('mouseleave', lineId, () => {
-              map.current!.setPaintProperty(lineId, 'line-width', 4)
-              map.current!.setPaintProperty(lineId, 'line-opacity', 0.9)
-              map.current!.getCanvas().style.cursor = ''
-            })
-
-            // Add click handler for route information
-            map.current!.on('click', lineId, (e) => {
-              const feature = e.features?.[0]
-              if (feature) {
-                const properties = feature.properties
-                const isActualRoute = properties?.isActualRoute
-                const coordinateCount = properties?.coordinateCount || 0
-
-                new maplibregl.Popup()
-                  .setLngLat(e.lngLat)
-                  .setHTML(`
-                    <div class="p-3">
-                      <div class="font-semibold text-gray-900 mb-2">${properties?.resourceName}</div>
-                      <div class="text-sm text-gray-600 mb-1">Route ${(properties?.tripIndex || 0) + 1}</div>
-                      <div class="text-sm text-gray-600 mb-1">${properties?.visitCount || 0} stops</div>
-                      ${isActualRoute ?
-                        `<div class="text-sm text-green-600">✓ Actual route geometry (${coordinateCount} points)</div>` :
-                        `<div class="text-sm text-blue-600">⭢ Straight-line approximation</div>`
-                      }
-                    </div>
-                  `)
-                  .addTo(map.current!)
-              }
-            })
-          }
-        })
-      } else {
-        console.log('🗺️ VrpMap: Rendering request data (markers only)')
-        clearMarkers()
-
-        const bounds = new maplibregl.LngLatBounds()
-
-        // Add resource markers
-        const resources = requestData.resources as Array<Record<string, unknown>> | undefined
-        resources?.forEach((resource) => {
-          const shifts = resource.shifts as Array<Record<string, unknown>> | undefined
-          shifts?.forEach((shift) => {
-            if (shift.start && typeof shift.start === 'object' && shift.start !== null) {
-              const location = shift.start as { longitude?: number; latitude?: number }
-              if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                const el = createMarkerElement('resource', typeof resource.name === 'string' ? resource.name : 'Resource')
-                const marker = new maplibregl.Marker({ element: el })
-                  .setLngLat([location.longitude, location.latitude])
-                  .addTo(map.current!)
-                markers.current.push(marker)
-                bounds.extend([location.longitude, location.latitude])
-              }
-            }
-          })
-        })
-
-        // Add job markers
-        const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-        jobs?.forEach((job) => {
-          if (job.location && typeof job.location === 'object' && job.location !== null) {
-            const location = job.location as { longitude?: number; latitude?: number }
-            if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-              const el = createMarkerElement('job', typeof job.name === 'string' ? job.name : 'Job')
-              const marker = new maplibregl.Marker({ element: el })
-                .setLngLat([location.longitude, location.latitude])
-                .addTo(map.current!)
-              markers.current.push(marker)
-              bounds.extend([location.longitude, location.latitude])
-            }
-          }
-        })
-
-        // Fit map to bounds
-        if (!bounds.isEmpty()) {
-          map.current.fitBounds(bounds, { padding: 50 })
-        }
-      }
-    }
-  }, [requestData, responseData, createMarkerElement, isLoading])
 
   return (
     <div className={cn("relative w-full h-full", className)}>

@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, DragOverEvent, pointerWithin } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
 import { SortableItem } from '@/components/ui/sortable-item'
+import { createResourceColorMap, ROUTE_COLORS } from '@/lib/color-utils'
 
 export interface JobReorderEvent {
   jobId: string
@@ -30,18 +31,6 @@ interface VrpGanttProps {
   isReordering?: boolean
 }
 
-// Route colors matching VrpMap
-const ROUTE_COLORS = [
-  '#3B82F6', // blue
-  '#EF4444', // red
-  '#10B981', // emerald
-  '#F59E0B', // amber
-  '#8B5CF6', // violet
-  '#EC4899', // pink
-  '#06B6D4', // cyan
-  '#84CC16'  // lime
-]
-
 export function VrpGantt({
   responseData,
   className,
@@ -59,16 +48,8 @@ export function VrpGantt({
 
   // Create resource-to-color mapping for consistent colors across dates
   const resourceColors = useMemo(() => {
-    if (!responseData?.trips?.length) return new Map<string, string>()
-
-    const colorMap = new Map<string, string>()
-    const uniqueResources = Array.from(new Set(responseData.trips.map(t => t.resource).filter((r): r is string => r !== null && r !== undefined)))
-
-    uniqueResources.forEach((resource, idx) => {
-      colorMap.set(resource, ROUTE_COLORS[idx % ROUTE_COLORS.length])
-    })
-
-    return colorMap
+    if (!responseData?.trips) return new Map<string, string>()
+    return createResourceColorMap(responseData.trips)
   }, [responseData])
 
   // Extract unique dates from all trips
