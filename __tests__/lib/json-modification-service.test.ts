@@ -1,10 +1,10 @@
 import { JsonModificationService, ModificationResult, ProcessingOptions } from '../../lib/json-modification-service'
-import { OpenAIService, VrpModificationResponse } from '../../components/VrpAssistant/OpenAIService'
+import { OpenAIService, VrpModificationResponse } from '../../lib/openai-service'
 import { getSampleVrpData } from '../../lib/sample-data'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 
 // Mock the OpenAI service
-jest.mock('../../components/VrpAssistant/OpenAIService')
+jest.mock('../../lib/openai-service')
 
 describe('JsonModificationService', () => {
   let service: JsonModificationService

@@ -1,11 +1,11 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { Message, ExecutionMetadata } from '@/components/ui/chat-message'
-import { ChatPersistence } from './ChatPersistence'
-import { OpenAIService, type CsvToVrpResponse } from './OpenAIService'
+import { OpenAIService, type CsvToVrpResponse } from '@/lib/openai-service'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { ErrorHandlingService, type VrpError } from '@/lib/error-handling-service'
+import { useVrpMessages } from '@/lib/hooks/useVrpMessages'
 
 interface VrpAssistantContextType {
   isProcessing: boolean
@@ -36,50 +36,19 @@ interface VrpAssistantProviderProps {
 }
 
 export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
+  // Use custom hooks for message management
+  const { messages, addMessage, clearMessages } = useVrpMessages()
+
+  // State management
   const [isProcessing, setIsProcessingState] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([])
   const [vrpData, setVrpDataState] = useState<Vrp.VrpSyncSolveParams | null>(null)
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [openAIService] = useState<OpenAIService | null>(null)
   const [onVrpDataUpdate, setOnVrpDataUpdateState] = useState<((data: Vrp.VrpSyncSolveParams) => void) | undefined>()
 
-  // Load messages from localStorage on mount
-  useEffect(() => {
-    const savedMessages = ChatPersistence.loadMessages()
-    if (savedMessages.length > 0) {
-      setMessages(savedMessages)
-    }
-  }, [])
-
-  // Save messages to localStorage whenever messages change
-  useEffect(() => {
-    if (messages.length > 0) {
-      ChatPersistence.saveMessages(messages)
-    }
-  }, [messages])
-
   const setProcessing = (processing: boolean) => {
     setIsProcessingState(processing)
-  }
-
-  const addMessage = (role: 'user' | 'assistant' | 'system', content: string, executionMetadata?: ExecutionMetadata) => {
-    const newMessage: Message = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      role,
-      content: content.trim(),
-      createdAt: new Date(),
-      executionMetadata
-    }
-    setMessages(prev => {
-      const updatedMessages = [...prev, newMessage]
-      return updatedMessages
-    })
-  }
-
-  const clearMessages = () => {
-    setMessages([])
-    ChatPersistence.clearMessages()
   }
 
   const setVrpData = (data: Vrp.VrpSyncSolveParams | null) => {

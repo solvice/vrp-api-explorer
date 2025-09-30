@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { VrpSchemaService } from "../../lib/vrp-schema-service";
+import { VrpSchemaService } from "./vrp-schema-service";
 import { Vrp } from "solvice-vrp-solver/resources/vrp/vrp";
-import { ErrorHandlingService } from '@/lib/error-handling-service';
+import { ErrorHandlingService } from './error-handling-service';
 
 export interface VrpModificationRequest {
   currentData: Vrp.VrpSyncSolveParams;
@@ -32,7 +32,8 @@ export interface CsvToVrpResponse {
   };
 }
 
-// Zod schemas for structured outputs
+// Zod schemas for structured outputs (currently unused but kept for future validation)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VrpModificationResponseSchema = z.object({
   modifiedData: z.any(), // VRP data structure - using any to match existing interface
   explanation: z.string(),
@@ -43,6 +44,7 @@ const VrpModificationResponseSchema = z.object({
   }))
 });
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const CsvToVrpResponseSchema = z.object({
   vrpData: z.any(), // VRP data structure - using any to match existing interface
   explanation: z.string(),
@@ -217,7 +219,7 @@ export class OpenAIService {
         const userMessage = this.buildVrpUserMessage(request);
 
         const result = await this.sendStructuredMessage(userMessage, systemPrompt);
-        
+
         // Validate the modified data structure
         const validation = VrpSchemaService.validateModification(
           request.currentData,

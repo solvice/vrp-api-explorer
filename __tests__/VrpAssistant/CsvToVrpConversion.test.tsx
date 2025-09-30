@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { OpenAIService } from '@/components/VrpAssistant/OpenAIService'
+import { OpenAIService } from '@/lib/openai-service'
 import OpenAI from 'openai'
 import { VrpSchemaService } from '@/lib/vrp-schema-service'
 import { describe, it } from 'node:test'

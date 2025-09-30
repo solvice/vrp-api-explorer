@@ -1,4 +1,4 @@
-import { OpenAIService, VrpModificationRequest } from '../components/VrpAssistant/OpenAIService'
+import { OpenAIService, VrpModificationRequest } from './openai-service'
 import { VrpSchemaService } from './vrp-schema-service'
 import { validateVrpRequest } from './vrp-schema'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'

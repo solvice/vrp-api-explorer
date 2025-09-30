@@ -13,20 +13,31 @@ import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { toast, Toaster } from 'sonner'
 
 export function VrpExplorer() {
-  // State management
-  const [currentSample, setCurrentSample] = useState<SampleType>('simple')
-  const [requestData, setRequestData] = useState(() => getSampleVrpData('simple'))
-  const [responseData, setResponseData] = useState<Vrp.OnRouteResponse | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [validationResult, setValidationResult] = useState<ValidationResult>({ valid: true, errors: [] })
-  // API status - always configured since keys are server-side
-  const [apiKeyStatus] = useState<{ type: 'demo' | 'user', masked: string }>({
-    type: 'user',
-    masked: 'Configured (Server-side)'
+  // State management - grouped by logical concern
+
+  // VRP Request state (input data and validation)
+  const [vrpRequest, setVrpRequest] = useState({
+    data: getSampleVrpData('simple'),
+    sample: 'simple' as SampleType,
+    validation: { valid: true, errors: [] } as ValidationResult
   })
 
-  // Job loading state
-  const [loadedJobId, setLoadedJobId] = useState<string | null>(null)
+  // VRP Response state (solution and loading)
+  const [vrpResponse, setVrpResponse] = useState({
+    data: null as Vrp.OnRouteResponse | null,
+    isLoading: false
+  })
+
+  // Job loading state (persisted job from URL)
+  const [jobState, setJobState] = useState({
+    loadedJobId: null as string | null
+  })
+
+  // API status - always configured since keys are server-side
+  const apiKeyStatus = {
+    type: 'user' as const,
+    masked: 'Configured (Server-side)'
+  }
 
   // URL parameter handling
   const searchParams = useSearchParams()
@@ -40,24 +51,23 @@ export function VrpExplorer() {
 
   // Handle VRP solving
   const handleSolve = useCallback(async () => {
-    if (!validationResult.valid) {
+    if (!vrpRequest.validation.valid) {
       toast.error('Please fix validation errors before sending')
       return
     }
 
-    setIsLoading(true)
-    setResponseData(null)
+    setVrpResponse(prev => ({ ...prev, isLoading: true, data: null }))
 
     try {
       const toastId = toast.loading('Solving VRP problem...')
-      
+
       // Make direct API call to our server-side route
       const response = await fetch('/api/vrp/solve', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestData)
+        body: JSON.stringify(vrpRequest.data)
       })
 
       if (!response.ok) {
@@ -69,7 +79,7 @@ export function VrpExplorer() {
       }
 
       const result = await response.json()
-      
+
       toast.dismiss(toastId)
       toast.success('VRP problem solved successfully!')
 
@@ -80,13 +90,13 @@ export function VrpExplorer() {
         console.log('🚀 First trip polyline:', result.trips[0].polyline)
       }
 
-      setResponseData(result)
+      setVrpResponse(prev => ({ ...prev, data: result }))
     } catch (error) {
       toast.dismiss()
-      
+
       if (error instanceof VrpApiError) {
         toast.error(error.message)
-        
+
         // Handle specific error types
         switch (error.type) {
           case 'authentication':
@@ -107,9 +117,9 @@ export function VrpExplorer() {
         console.error('VRP solving error:', error)
       }
     } finally {
-      setIsLoading(false)
+      setVrpResponse(prev => ({ ...prev, isLoading: false }))
     }
-  }, [requestData, validationResult.valid])
+  }, [vrpRequest.data, vrpRequest.validation.valid])
 
   // Handle request data changes
   const handleRequestChange = useCallback((newRequestData: Record<string, unknown>) => {
@@ -119,21 +129,21 @@ export function VrpExplorer() {
       hasResources: Array.isArray((newRequestData as Record<string, unknown>)?.resources),
       resourceCount: Array.isArray((newRequestData as Record<string, unknown>)?.resources) ? ((newRequestData as Record<string, unknown>).resources as unknown[]).length : 0
     })
-    setRequestData(newRequestData as unknown as Vrp.VrpSyncSolveParams)
+    setVrpRequest(prev => ({ ...prev, data: newRequestData as unknown as Vrp.VrpSyncSolveParams }))
     // Clear response when request changes
-    setResponseData(null)
+    setVrpResponse(prev => ({ ...prev, data: null }))
   }, [])
 
   // Handle validation changes
   const handleValidationChange = useCallback((result: ValidationResult) => {
-    setValidationResult(result)
+    setVrpRequest(prev => ({ ...prev, validation: result }))
   }, [])
 
   // Handle sample changes
   const handleSampleChange = useCallback((sample: SampleType) => {
-    setCurrentSample(sample)
+    setVrpRequest(prev => ({ ...prev, sample }))
     // Clear response when changing samples
-    setResponseData(null)
+    setVrpResponse(prev => ({ ...prev, data: null }))
   }, [])
 
   // Handle job loading
@@ -150,19 +160,19 @@ export function VrpExplorer() {
 
       // Replace request data
       if (result.request) {
-        setRequestData(result.request)
-        setResponseData(null) // Clear any existing solution
+        setVrpRequest(prev => ({ ...prev, data: result.request }))
+        setVrpResponse(prev => ({ ...prev, data: null })) // Clear any existing solution
       }
 
       // Load solution if available
       if (result.solution) {
-        setResponseData(result.solution)
+        setVrpResponse(prev => ({ ...prev, data: result.solution }))
       } else if (result.solutionError) {
         toast.info(result.solutionError)
       }
 
       // Update URL and state
-      setLoadedJobId(jobId)
+      setJobState({ loadedJobId: jobId })
       router.push(`/?run=${jobId}`, { scroll: false })
 
       toast.success('Job loaded successfully!')
@@ -173,7 +183,7 @@ export function VrpExplorer() {
 
   // Handle clearing loaded job
   const handleClearJob = useCallback(() => {
-    setLoadedJobId(null)
+    setJobState({ loadedJobId: null })
     router.push('/', { scroll: false })
     toast.info('Cleared loaded job')
   }, [router])
@@ -181,7 +191,7 @@ export function VrpExplorer() {
   // Auto-load job from URL parameter
   useEffect(() => {
     const runParam = searchParams.get('run')
-    if (runParam && runParam !== loadedJobId) {
+    if (runParam && runParam !== jobState.loadedJobId) {
       handleLoadJob(runParam).catch(error => {
         console.error('Failed to auto-load job:', error)
         toast.error('Failed to load job from URL')
@@ -189,7 +199,7 @@ export function VrpExplorer() {
         router.push('/', { scroll: false })
       })
     }
-  }, [searchParams, loadedJobId, handleLoadJob, router])
+  }, [searchParams, jobState.loadedJobId, handleLoadJob, router])
 
 
   return (
@@ -197,26 +207,26 @@ export function VrpExplorer() {
       <VrpLayout
         leftPanel={
           <VrpJsonEditor
-            requestData={requestData as unknown as Record<string, unknown>}
-            responseData={responseData}
+            requestData={vrpRequest.data as unknown as Record<string, unknown>}
+            responseData={vrpResponse.data}
             onChange={handleRequestChange}
             onValidationChange={handleValidationChange}
-            isLoading={isLoading}
+            isLoading={vrpResponse.isLoading}
             onSend={handleSolve}
             disabled={false}
             apiKeyStatus={apiKeyStatus}
             onApiKeyChange={handleApiKeyChange}
-            currentSample={currentSample}
+            currentSample={vrpRequest.sample}
             onSampleChange={handleSampleChange}
-            loadedJobId={loadedJobId}
+            loadedJobId={jobState.loadedJobId}
             onLoadJob={handleLoadJob}
             onClearJob={handleClearJob}
           />
         }
         centerPanel={
           <VrpMap
-            requestData={requestData as unknown as Record<string, unknown>}
-            responseData={responseData}
+            requestData={vrpRequest.data as unknown as Record<string, unknown>}
+            responseData={vrpResponse.data}
           />
         }
       />
