@@ -943,11 +943,14 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
     })
 
     clearRoutes()
-    
+
     if (responseData) {
       console.log('🗺️ VrpMap: Rendering solution data (routes + markers)')
       updateMarkersWithSequence()
-      addRouteVisualization()
+      // Use setTimeout to ensure clearRoutes completes and map is ready
+      setTimeout(() => {
+        addRouteVisualization()
+      }, 50)
     } else {
       console.log('🗺️ VrpMap: Rendering request data (markers only)')
       clearMarkers()
