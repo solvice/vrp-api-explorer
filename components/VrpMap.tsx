@@ -15,6 +15,8 @@ interface VrpMapProps {
   requestData: Record<string, unknown>
   responseData?: Vrp.OnRouteResponse | null
   className?: string
+  highlightedJob?: { resource: string; job: string } | null
+  onJobHover?: (job: { resource: string; job: string } | null) => void
 }
 
 // Route colors for different vehicles
@@ -61,10 +63,11 @@ const saveMapStyle = (styleId: MapStyleId) => {
   }
 }
 
-export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
+export function VrpMap({ requestData, responseData, className, highlightedJob, onJobHover }: VrpMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const markers = useRef<maplibregl.Marker[]>([])
+  const markerMetadata = useRef<Map<maplibregl.Marker, { resource: string; job: string }>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [currentStyle, setCurrentStyle] = useState<MapStyleId>(getSavedMapStyle)
   const [isStyleChanging, setIsStyleChanging] = useState(false)
@@ -115,6 +118,7 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
   const clearMarkers = () => {
     markers.current.forEach(marker => marker.remove())
     markers.current = []
+    markerMetadata.current.clear()
   }
 
   // Switch map style
@@ -177,18 +181,20 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
           // Add job markers with sequence numbers and vehicle colors
           responseData.trips?.forEach((trip, tripIndex) => {
             const vehicleColor = ROUTE_COLORS[tripIndex % ROUTE_COLORS.length]
-            
+
             trip.visits?.forEach((visit, visitIndex) => {
               const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
               const job = jobs?.find((j) => j.name === visit.job)
               if (job?.location && typeof job.location === 'object' && job.location !== null) {
                 const location = job.location as { longitude?: number; latitude?: number }
                 if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-                  const el = createMarkerElement('job', typeof job.name === 'string' ? job.name : 'Job', visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor)
+                  const jobName = typeof job.name === 'string' ? job.name : 'Job'
+                  const el = createMarkerElement('job', jobName, visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor, trip.resource)
                   const marker = new maplibregl.Marker({ element: el })
                     .setLngLat([location.longitude, location.latitude])
                     .addTo(map.current!)
                   markers.current.push(marker)
+                  markerMetadata.current.set(marker, { resource: trip.resource, job: jobName })
                 }
               }
             })
@@ -362,19 +368,20 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
 
   // Create marker element with custom styling and hover interactions
   const createMarkerElement = (
-    type: 'job' | 'resource', 
-    name: string, 
-    sequence?: number, 
+    type: 'job' | 'resource',
+    name: string,
+    sequence?: number,
     visit?: Record<string, unknown>,
-    vehicleColor?: string
+    vehicleColor?: string,
+    resourceName?: string
   ) => {
     const el = document.createElement('div')
     el.className = `${type}-marker cursor-pointer relative`
-    
+
     if (type === 'job') {
       const markerColor = vehicleColor || '#3B82F6'
       el.innerHTML = `
-        <div class="marker-icon flex items-center justify-center w-8 h-8 text-white rounded-full border-2 border-white shadow-lg text-xs font-bold transition-transform hover:scale-110" style="background-color: ${markerColor}">
+        <div class="marker-icon flex items-center justify-center w-8 h-8 text-white rounded-full border-2 border-white shadow-lg text-xs font-bold transition-all hover:scale-110" style="background-color: ${markerColor}">
           ${sequence || '•'}
         </div>
         <div class="marker-tooltip absolute top-full left-1/2 transform -translate-x-1/2 mt-1 px-3 py-2 bg-white rounded-lg shadow-lg border text-xs whitespace-nowrap opacity-0 invisible transition-all duration-200 z-10 pointer-events-none">
@@ -408,6 +415,10 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
         tooltip.classList.remove('opacity-0', 'invisible')
         tooltip.classList.add('opacity-100', 'visible')
       }
+      // Notify parent of hover if this is a job marker with resource
+      if (type === 'job' && resourceName && onJobHover) {
+        onJobHover({ resource: resourceName, job: name })
+      }
     })
 
     el.addEventListener('mouseleave', () => {
@@ -416,8 +427,12 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
         tooltip.classList.remove('opacity-100', 'visible')
         tooltip.classList.add('opacity-0', 'invisible')
       }
+      // Clear hover state
+      if (type === 'job' && onJobHover) {
+        onJobHover(null)
+      }
     })
-    
+
     return el
   }
 
@@ -705,19 +720,21 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
     // Add job markers with sequence numbers and vehicle colors
     responseData.trips?.forEach((trip, tripIndex) => {
       const vehicleColor = ROUTE_COLORS[tripIndex % ROUTE_COLORS.length]
-      
+
       trip.visits?.forEach((visit, visitIndex) => {
         const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
         const job = jobs?.find((j) => j.name === visit.job)
         if (job?.location && typeof job.location === 'object' && job.location !== null) {
           const location = job.location as { longitude?: number; latitude?: number }
           if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
-            const el = createMarkerElement('job', typeof job.name === 'string' ? job.name : 'Job', visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor)
+            const jobName = typeof job.name === 'string' ? job.name : 'Job'
+            const el = createMarkerElement('job', jobName, visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor, trip.resource)
             const marker = new maplibregl.Marker({ element: el })
               .setLngLat([location.longitude, location.latitude])
               .addTo(map.current!)
-            
+
             markers.current.push(marker)
+            markerMetadata.current.set(marker, { resource: trip.resource, job: jobName })
             boundsCoords.push([location.longitude, location.latitude])
           }
         }
@@ -731,6 +748,28 @@ export function VrpMap({ requestData, responseData, className }: VrpMapProps) {
       map.current!.fitBounds(bounds, { padding: 50 })
     }
   }, [requestData, responseData])
+
+  // Handle highlighting when highlightedJob changes
+  useEffect(() => {
+    markerMetadata.current.forEach((metadata, marker) => {
+      const el = marker.getElement()
+      const icon = el.querySelector('.marker-icon')
+      if (!icon) return
+
+      const isHighlighted = highlightedJob &&
+        metadata.resource === highlightedJob.resource &&
+        metadata.job === highlightedJob.job
+
+      if (isHighlighted) {
+        icon.classList.add('scale-125', 'ring-4', 'ring-white', 'ring-opacity-75')
+      } else if (highlightedJob) {
+        icon.classList.add('opacity-40')
+        icon.classList.remove('scale-125', 'ring-4', 'ring-white', 'ring-opacity-75')
+      } else {
+        icon.classList.remove('opacity-40', 'scale-125', 'ring-4', 'ring-white', 'ring-opacity-75')
+      }
+    })
+  }, [highlightedJob])
 
   // Clear route visualization
   const clearRoutes = () => {

@@ -45,7 +45,8 @@ pnpm test:hydration         # Check for SSR/hydration issues
 1. `VrpExplorer` - Root component managing state and API calls
 2. `VrpLayout` - Resizable split-pane layout using react-resizable-panels
 3. `VrpJsonEditor` - Left pane with JSON editing and validation
-4. `VrpMap` - Right pane with MapLibre GL visualization
+4. `VrpMap` - Right pane (top) with MapLibre GL visualization
+5. `VrpGantt` - Right pane (bottom) with timeline/Gantt chart visualization
 
 **VRP AI Assistant Architecture**:
 - `VrpAssistantProvider` - Context provider managing AI assistant state and OpenAI integration
@@ -136,13 +137,24 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 These are server-side only environment variables for security. API keys are never exposed to the client-side. The OpenAI API key enables the AI assistant functionality.
 
-## Map Integration
+## Visualization Components
 
+### Map Integration (VrpMap)
 - MapLibre GL for rendering with Solvice tile styling
 - Displays VRP problem locations and optimized routes
 - Color-coded vehicle routes with numbered markers
 - Interactive tooltips with timing information
 - **Polyline support**: When `options.polylines: true` is set in the VRP request, actual road geometry is displayed instead of straight-line approximations
+
+### Timeline Gantt Chart (VrpGantt)
+- **Minimal design**: Custom CSS Grid implementation with zero external dependencies
+- **Horizontal timeline**: Time-based visualization showing when vehicles visit each job
+- **Vehicle rows**: One row per vehicle/resource showing their schedule
+- **Activity blocks**: Color-coded bars representing job visits with duration
+- **Interactive tooltips**: Hover over activities to see arrival, departure, duration, and service time
+- **Responsive layout**: Positioned below map with resizable panels
+- **Automatic time range**: Calculates timeline span from solution data
+- **Styling**: Uses Shadcn/ui Card component and Tailwind utilities for minimal aesthetic
 
 ## AI Assistant Integration
 
@@ -166,7 +178,7 @@ These are server-side only environment variables for security. API keys are neve
 ### Adding New VRP Features
 1. Update types in `lib/vrp-schema.ts` to match SDK
 2. Modify `VrpJsonEditor` for UI changes
-3. Update `VrpMap` for visualization changes
+3. Update `VrpMap` and/or `VrpGantt` for visualization changes
 4. Add comprehensive tests in `__tests__/`
 
 ### Working with AI Assistant

@@ -10,6 +10,12 @@ import { useVrpAssistant } from './VrpAssistantContext'
 export function VrpAssistantContainer() {
   const { messages, isOpen, toggleAssistant, closeAssistant } = useVrpAssistant()
   const [isMobile, setIsMobile] = useState(false)
+  const [isClient, setIsClient] = useState(false)
+
+  // Hydration fix: only show notification badge after client-side hydration
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   // Check mobile viewport
   useEffect(() => {
@@ -46,8 +52,8 @@ export function VrpAssistantContainer() {
     }
   }, [isOpen, toggleAssistant, closeAssistant])
 
-  // Check if there are any unread messages (for notification badge)
-  const hasMessages = messages.length > 0
+  // Check if there are any messages (for notification badge) - only after hydration
+  const hasMessages = isClient && messages.length > 0
 
   return (
     <Sheet open={isOpen} onOpenChange={toggleAssistant}>

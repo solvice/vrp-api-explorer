@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimiters, createRateLimitHeaders } from '@/lib/rate-limiter'
+import SolviceVrp from 'solvice-vrp-solver'
 
 export async function GET(
   request: NextRequest,
@@ -45,20 +46,19 @@ export async function GET(
       )
     }
 
-    // Fetch request and solution simultaneously
+    // Initialize SDK client
+    const client = new SolviceVrp({ bearerToken: apiKey })
+
+    // Fetch request and solution simultaneously using SDK
     const [requestResponse, solutionResponse] = await Promise.allSettled([
-      fetch(`https://api.solvice.io/v2/vrp/${jobId}`, {
-        headers: { 'Authorization': `Bearer ${apiKey}` }
-      }),
-      fetch(`https://api.solvice.io/v2/vrp/${jobId}/solution`, {
-        headers: { 'Authorization': `Bearer ${apiKey}` }
-      })
+      client.vrp.jobs.retrieve(jobId),
+      client.vrp.jobs.solution(jobId)
     ])
 
     // Handle request fetch result
     let requestData = null
-    if (requestResponse.status === 'fulfilled' && requestResponse.value.ok) {
-      requestData = await requestResponse.value.json()
+    if (requestResponse.status === 'fulfilled') {
+      requestData = requestResponse.value
     } else {
       return NextResponse.json(
         { error: 'Job not found' },
@@ -71,15 +71,15 @@ export async function GET(
     let solutionError = null
 
     if (solutionResponse.status === 'fulfilled') {
-      if (solutionResponse.value.ok) {
-        solutionData = await solutionResponse.value.json()
-      } else if (solutionResponse.value.status === 404) {
+      solutionData = solutionResponse.value
+    } else {
+      // Check if it's a 404 (solution not ready) or other error
+      const error = solutionResponse.reason
+      if (error?.status === 404) {
         solutionError = 'Solution not ready yet'
       } else {
         solutionError = 'Failed to fetch solution'
       }
-    } else {
-      solutionError = 'Solution fetch failed'
     }
 
     return NextResponse.json({

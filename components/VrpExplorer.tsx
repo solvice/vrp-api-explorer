@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
 import { VrpMap } from './VrpMap'
+import { VrpGantt } from './VrpGantt'
 import { VrpAssistantContainer } from './VrpAssistant/VrpAssistantContainer'
 import { VrpApiError } from '@/lib/vrp-api'
 import { getSampleVrpData, SampleType } from '@/lib/sample-data'
@@ -32,6 +33,9 @@ export function VrpExplorer() {
   const [jobState, setJobState] = useState({
     loadedJobId: null as string | null
   })
+
+  // Highlighted job state for hover interactions between map and gantt
+  const [highlightedJob, setHighlightedJob] = useState<{ resource: string; job: string } | null>(null)
 
   // API status - always configured since keys are server-side
   const apiKeyStatus = {
@@ -205,6 +209,7 @@ export function VrpExplorer() {
   return (
     <>
       <VrpLayout
+        leftPanelSize={35}
         leftPanel={
           <VrpJsonEditor
             requestData={vrpRequest.data as unknown as Record<string, unknown>}
@@ -227,7 +232,19 @@ export function VrpExplorer() {
           <VrpMap
             requestData={vrpRequest.data as unknown as Record<string, unknown>}
             responseData={vrpResponse.data}
+            highlightedJob={highlightedJob}
+            onJobHover={setHighlightedJob}
           />
+        }
+        bottomPanel={
+          vrpResponse.data?.trips?.length ? (
+            <VrpGantt
+              requestData={vrpRequest.data as unknown as Record<string, unknown>}
+              responseData={vrpResponse.data}
+              highlightedJob={highlightedJob}
+              onJobHover={setHighlightedJob}
+            />
+          ) : undefined
         }
       />
 
