@@ -163,7 +163,14 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
         if (responseData) {
           // Re-apply solution data (routes + numbered markers)
           clearMarkers()
-          
+
+          // Create resource-to-color mapping (same as VrpGantt for consistency)
+          const resourceColors = new Map<string, string>()
+          const uniqueResources = Array.from(new Set(responseData.trips?.map(t => t.resource) || []))
+          uniqueResources.forEach((resource, idx) => {
+            resourceColors.set(resource, ROUTE_COLORS[idx % ROUTE_COLORS.length])
+          })
+
           // Add resource markers (depots)
           const resources = requestData.resources as Array<{ name?: string; shifts?: Array<{ start?: { longitude: number; latitude: number } }> }> | undefined
           resources?.forEach((resource) => {
@@ -180,7 +187,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
 
           // Add job markers with sequence numbers and vehicle colors
           responseData.trips?.forEach((trip, tripIndex) => {
-            const vehicleColor = ROUTE_COLORS[tripIndex % ROUTE_COLORS.length]
+            const vehicleColor = resourceColors.get(trip.resource) || ROUTE_COLORS[0]
 
             trip.visits?.forEach((visit, visitIndex) => {
               const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
@@ -505,8 +512,15 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
       return
     }
 
+    // Create resource-to-color mapping (same as VrpGantt for consistency)
+    const resourceColors = new Map<string, string>()
+    const uniqueResources = Array.from(new Set(trips.map(t => t.resource)))
+    uniqueResources.forEach((resource, idx) => {
+      resourceColors.set(resource, ROUTE_COLORS[idx % ROUTE_COLORS.length])
+    })
+
     trips.forEach((trip, tripIndex) => {
-      const color = ROUTE_COLORS[tripIndex % ROUTE_COLORS.length]
+      const color = resourceColors.get(trip.resource) || ROUTE_COLORS[0]
       const routeId = `route-${tripIndex}`
       const lineId = `line-${tripIndex}`
       const shadowId = `shadow-${tripIndex}`
@@ -699,6 +713,13 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
 
     clearMarkers()
 
+    // Create resource-to-color mapping (same as VrpGantt for consistency)
+    const resourceColors = new Map<string, string>()
+    const uniqueResources = Array.from(new Set(responseData.trips?.map(t => t.resource) || []))
+    uniqueResources.forEach((resource, idx) => {
+      resourceColors.set(resource, ROUTE_COLORS[idx % ROUTE_COLORS.length])
+    })
+
     // Create bounds for fitting map view
     const boundsCoords = [] as Array<[number, number]>
 
@@ -710,7 +731,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
           const marker = new maplibregl.Marker({ element: el })
             .setLngLat([shift.start.longitude, shift.start.latitude])
             .addTo(map.current!)
-          
+
           markers.current.push(marker)
           boundsCoords.push([shift.start.longitude, shift.start.latitude])
         }
@@ -719,7 +740,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
 
     // Add job markers with sequence numbers and vehicle colors
     responseData.trips?.forEach((trip, tripIndex) => {
-      const vehicleColor = ROUTE_COLORS[tripIndex % ROUTE_COLORS.length]
+      const vehicleColor = resourceColors.get(trip.resource) || ROUTE_COLORS[0]
 
       trip.visits?.forEach((visit, visitIndex) => {
         const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
