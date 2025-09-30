@@ -28,13 +28,13 @@ const ROUTE_COLORS = [
   '#84CC16'  // lime
 ]
 
-export function VrpGantt({ requestData, responseData, className, highlightedJob, onJobHover }: VrpGanttProps) {
+export function VrpGantt({ responseData, className, highlightedJob, onJobHover }: VrpGanttProps) {
   // Create resource-to-color mapping for consistent colors across dates
   const resourceColors = useMemo(() => {
     if (!responseData?.trips?.length) return new Map<string, string>()
 
     const colorMap = new Map<string, string>()
-    const uniqueResources = Array.from(new Set(responseData.trips.map(t => t.resource)))
+    const uniqueResources = Array.from(new Set(responseData.trips.map(t => t.resource).filter((r): r is string => r !== null && r !== undefined)))
 
     uniqueResources.forEach((resource, idx) => {
       colorMap.set(resource, ROUTE_COLORS[idx % ROUTE_COLORS.length])
@@ -101,9 +101,7 @@ export function VrpGantt({ requestData, responseData, className, highlightedJob,
       trip.visits?.forEach(visit => {
         if (visit.arrival) {
           const arrivalTime = new Date(visit.arrival).getTime()
-          const departureTime = visit.departure
-            ? new Date(visit.departure).getTime()
-            : arrivalTime + (visit.serviceTime || 0) * 1000
+          const departureTime = arrivalTime + (visit.serviceTime || 0) * 1000
 
           minTime = Math.min(minTime, arrivalTime)
           maxTime = Math.max(maxTime, departureTime)
@@ -151,13 +149,11 @@ export function VrpGantt({ requestData, responseData, className, highlightedJob,
   }
 
   // Convert arrival/departure times to width percentage
-  const calculateWidth = (arrivalTime: string, departureTime?: string, serviceTime?: number) => {
+  const calculateWidth = (arrivalTime: string, serviceTime?: number | null) => {
     if (!timelineData) return 0
 
     const arrival = new Date(arrivalTime).getTime()
-    const departure = departureTime
-      ? new Date(departureTime).getTime()
-      : arrival + (serviceTime || 0) * 1000
+    const departure = arrival + (serviceTime || 0) * 1000
 
     return ((departure - arrival) / timelineData.totalDuration) * 100
   }
@@ -278,11 +274,12 @@ export function VrpGantt({ requestData, responseData, className, highlightedJob,
             {/* Vehicle rows */}
             <div className="divide-y divide-border">
               {filteredTrips.map((trip, tripIdx) => {
-                const color = resourceColors.get(trip.resource) || ROUTE_COLORS[0]
+                const resourceName = trip.resource || 'Unknown'
+                const color = resourceColors.get(resourceName) || ROUTE_COLORS[0]
 
                 return (
                   <div
-                    key={`${trip.resource}-${tripIdx}`}
+                    key={`${resourceName}-${tripIdx}`}
                     className="flex hover:bg-muted/30 transition-colors"
                   >
                     {/* Vehicle label */}
@@ -292,7 +289,7 @@ export function VrpGantt({ requestData, responseData, className, highlightedJob,
                         style={{ backgroundColor: color }}
                       />
                       <span className="text-xs font-medium truncate">
-                        {trip.resource}
+                        {resourceName}
                       </span>
                     </div>
 
@@ -317,20 +314,18 @@ export function VrpGantt({ requestData, responseData, className, highlightedJob,
                         const left = timeToPosition(visit.arrival)
                         const width = calculateWidth(
                           visit.arrival,
-                          visit.departure,
                           visit.serviceTime
                         )
 
                         // Calculate duration in minutes
                         const arrival = new Date(visit.arrival).getTime()
-                        const departure = visit.departure
-                          ? new Date(visit.departure).getTime()
-                          : arrival + (visit.serviceTime || 0) * 1000
+                        const departure = arrival + (visit.serviceTime || 0) * 1000
                         const durationMinutes = Math.round((departure - arrival) / (1000 * 60))
 
+                        const jobName = visit.job || 'Unknown'
                         const isHighlighted = highlightedJob &&
-                          highlightedJob.resource === trip.resource &&
-                          highlightedJob.job === visit.job
+                          highlightedJob.resource === resourceName &&
+                          highlightedJob.job === jobName
 
                         const isDimmed = highlightedJob && !isHighlighted
 
@@ -350,23 +345,21 @@ export function VrpGantt({ requestData, responseData, className, highlightedJob,
                                   backgroundColor: color,
                                   minWidth: '32px'
                                 }}
-                                onMouseEnter={() => onJobHover?.({ resource: trip.resource, job: visit.job })}
+                                onMouseEnter={() => onJobHover?.({ resource: resourceName, job: jobName })}
                                 onMouseLeave={() => onJobHover?.(null)}
                               >
-                                <span className="truncate">{visit.job}</span>
+                                <span className="truncate">{jobName}</span>
                               </div>
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-xs">
                               <div className="space-y-1">
-                                <p className="font-medium">{visit.job}</p>
+                                <p className="font-medium">{jobName}</p>
                                 <p className="text-xs text-muted-foreground">
                                   Arrival: {formatTime(new Date(visit.arrival))}
                                 </p>
-                                {visit.departure && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Departure: {formatTime(new Date(visit.departure))}
-                                  </p>
-                                )}
+                                <p className="text-xs text-muted-foreground">
+                                  Departure: {formatTime(new Date(departure))}
+                                </p>
                                 <p className="text-xs text-muted-foreground">
                                   Duration: {durationMinutes} min
                                 </p>

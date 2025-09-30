@@ -12,6 +12,7 @@ interface VrpLayoutProps {
   leftPanel: ReactNode
   centerPanel: ReactNode
   bottomPanel?: ReactNode
+  kpiBar?: ReactNode
   leftPanelSize?: number
 }
 
@@ -19,6 +20,7 @@ export function VrpLayout({
   leftPanel,
   centerPanel,
   bottomPanel,
+  kpiBar,
   leftPanelSize = 50
 }: VrpLayoutProps) {
   const [isMobile, setIsMobile] = useState(false)
@@ -113,6 +115,12 @@ export function VrpLayout({
                   {centerPanel}
                 </div>
               </ResizablePanel>
+
+              {kpiBar && (
+                <div className="w-full">
+                  {kpiBar}
+                </div>
+              )}
 
               <ResizableHandle withHandle />
 

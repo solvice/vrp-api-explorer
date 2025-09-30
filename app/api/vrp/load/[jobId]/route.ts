@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimiters, createRateLimitHeaders } from '@/lib/rate-limiter'
-import SolviceVrp from 'solvice-vrp-solver'
+import { SolviceVrpSolver } from 'solvice-vrp-solver'
 
 export async function GET(
   request: NextRequest,
@@ -47,7 +47,7 @@ export async function GET(
     }
 
     // Initialize SDK client
-    const client = new SolviceVrp({ bearerToken: apiKey })
+    const client = new SolviceVrpSolver({ apiKey: apiKey })
 
     // Fetch request and solution simultaneously using SDK
     const [requestResponse, solutionResponse] = await Promise.allSettled([

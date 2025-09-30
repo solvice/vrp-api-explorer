@@ -166,7 +166,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
 
           // Create resource-to-color mapping (same as VrpGantt for consistency)
           const resourceColors = new Map<string, string>()
-          const uniqueResources = Array.from(new Set(responseData.trips?.map(t => t.resource) || []))
+          const uniqueResources = Array.from(new Set(responseData.trips?.map(t => t.resource).filter((r): r is string => r !== null && r !== undefined) || []))
           uniqueResources.forEach((resource, idx) => {
             resourceColors.set(resource, ROUTE_COLORS[idx % ROUTE_COLORS.length])
           })
@@ -186,8 +186,9 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
           })
 
           // Add job markers with sequence numbers and vehicle colors
-          responseData.trips?.forEach((trip, tripIndex) => {
-            const vehicleColor = resourceColors.get(trip.resource) || ROUTE_COLORS[0]
+          responseData.trips?.forEach((trip) => {
+            const resourceName = trip.resource || 'Unknown'
+            const vehicleColor = resourceColors.get(resourceName) || ROUTE_COLORS[0]
 
             trip.visits?.forEach((visit, visitIndex) => {
               const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
@@ -196,12 +197,12 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
                 const location = job.location as { longitude?: number; latitude?: number }
                 if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
                   const jobName = typeof job.name === 'string' ? job.name : 'Job'
-                  const el = createMarkerElement('job', jobName, visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor, trip.resource)
+                  const el = createMarkerElement('job', jobName, visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor, resourceName)
                   const marker = new maplibregl.Marker({ element: el })
                     .setLngLat([location.longitude, location.latitude])
                     .addTo(map.current!)
                   markers.current.push(marker)
-                  markerMetadata.current.set(marker, { resource: trip.resource, job: jobName })
+                  markerMetadata.current.set(marker, { resource: resourceName, job: jobName })
                 }
               }
             })
@@ -371,10 +372,10 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
     }
 
     map.current.on('styledata', handleStyleLoad)
-  }, [currentStyle, isStyleChanging, requestData, responseData])
+  }, [currentStyle, isStyleChanging, requestData, responseData, createMarkerElement])
 
   // Create marker element with custom styling and hover interactions
-  const createMarkerElement = (
+  const createMarkerElement = useCallback((
     type: 'job' | 'resource',
     name: string,
     sequence?: number,
@@ -440,7 +441,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
     })
 
     return el
-  }
+  }, [onJobHover])
 
   // Handle highlighting when highlightedJob changes
   useEffect(() => {
@@ -609,7 +610,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
 
         // Create resource-to-color mapping (same as VrpGantt for consistency)
         const resourceColors = new Map<string, string>()
-        const uniqueResources = Array.from(new Set(responseData.trips?.map(t => t.resource) || []))
+        const uniqueResources = Array.from(new Set(responseData.trips?.map(t => t.resource).filter((r): r is string => r !== null && r !== undefined) || []))
         uniqueResources.forEach((resource, idx) => {
           resourceColors.set(resource, ROUTE_COLORS[idx % ROUTE_COLORS.length])
         })
@@ -633,8 +634,9 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
         })
 
         // Add job markers with sequence numbers and vehicle colors
-        responseData.trips?.forEach((trip, tripIndex) => {
-          const vehicleColor = resourceColors.get(trip.resource) || ROUTE_COLORS[0]
+        responseData.trips?.forEach((trip) => {
+          const resourceName = trip.resource || 'Unknown'
+          const vehicleColor = resourceColors.get(resourceName) || ROUTE_COLORS[0]
 
           trip.visits?.forEach((visit, visitIndex) => {
             const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
@@ -643,13 +645,13 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
               const location = job.location as { longitude?: number; latitude?: number }
               if (typeof location.longitude === 'number' && typeof location.latitude === 'number') {
                 const jobName = typeof job.name === 'string' ? job.name : 'Job'
-                const el = createMarkerElement('job', jobName, visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor, trip.resource)
+                const el = createMarkerElement('job', jobName, visitIndex + 1, visit as unknown as Record<string, unknown>, vehicleColor, resourceName)
                 const marker = new maplibregl.Marker({ element: el })
                   .setLngLat([location.longitude, location.latitude])
                   .addTo(map.current!)
 
                 markers.current.push(marker)
-                markerMetadata.current.set(marker, { resource: trip.resource, job: jobName })
+                markerMetadata.current.set(marker, { resource: resourceName, job: jobName })
                 boundsCoords.push([location.longitude, location.latitude])
               }
             }
@@ -671,7 +673,8 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
         }
 
         trips.forEach((trip, tripIndex) => {
-          const color = resourceColors.get(trip.resource) || ROUTE_COLORS[0]
+          const resourceName = trip.resource || 'Unknown'
+          const color = resourceColors.get(resourceName) || ROUTE_COLORS[0]
           const routeId = `route-${tripIndex}`
           const lineId = `line-${tripIndex}`
           const shadowId = `shadow-${tripIndex}`
@@ -902,19 +905,19 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
         }
       }
     }
-  }, [requestData, responseData])
+  }, [requestData, responseData, createMarkerElement, isLoading])
 
   return (
     <div className={cn("relative w-full h-full", className)}>
-      <div 
-        ref={mapContainer} 
+      <div
+        ref={mapContainer}
         data-testid="vrp-map"
         className="w-full h-full"
       />
-      
+
       {/* Style Switcher */}
       <StyleSwitcher />
-      
+
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">

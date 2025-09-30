@@ -6,6 +6,7 @@ import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
 import { VrpMap } from './VrpMap'
 import { VrpGantt } from './VrpGantt'
+import { VrpKpiBar } from './VrpKpiBar'
 import { VrpAssistantContainer } from './VrpAssistant/VrpAssistantContainer'
 import { VrpApiError } from '@/lib/vrp-api'
 import { getSampleVrpData, SampleType } from '@/lib/sample-data'
@@ -235,6 +236,14 @@ export function VrpExplorer() {
             highlightedJob={highlightedJob}
             onJobHover={setHighlightedJob}
           />
+        }
+        kpiBar={
+          vrpResponse.data ? (
+            <VrpKpiBar
+              responseData={vrpResponse.data}
+              requestData={vrpRequest.data as unknown as Record<string, unknown>}
+            />
+          ) : undefined
         }
         bottomPanel={
           vrpResponse.data?.trips?.length ? (
