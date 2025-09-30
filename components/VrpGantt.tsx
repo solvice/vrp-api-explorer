@@ -7,6 +7,18 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, DragOverEvent, pointerWithin } from '@dnd-kit/core'
+import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
+import { SortableItem } from '@/components/ui/sortable-item'
+
+export interface JobReorderEvent {
+  jobId: string
+  afterJobId: string | null
+  fromResource: string
+  toResource: string
+  fromIndex: number
+  toIndex: number
+}
 
 interface VrpGanttProps {
   requestData: Record<string, unknown>
@@ -14,6 +26,8 @@ interface VrpGanttProps {
   className?: string
   highlightedJob?: { resource: string; job: string } | null
   onJobHover?: (job: { resource: string; job: string } | null) => void
+  onJobReorder?: (event: JobReorderEvent) => void
+  isReordering?: boolean
 }
 
 // Route colors matching VrpMap
@@ -28,7 +42,21 @@ const ROUTE_COLORS = [
   '#84CC16'  // lime
 ]
 
-export function VrpGantt({ responseData, className, highlightedJob, onJobHover }: VrpGanttProps) {
+export function VrpGantt({
+  responseData,
+  className,
+  highlightedJob,
+  onJobHover,
+  onJobReorder,
+  isReordering = false
+}: VrpGanttProps) {
+  const [activeJobData, setActiveJobData] = useState<{
+    jobId: string
+    resource: string
+    color: string
+  } | null>(null)
+  const [dropTargetResource, setDropTargetResource] = useState<string | null>(null)
+
   // Create resource-to-color mapping for consistent colors across dates
   const resourceColors = useMemo(() => {
     if (!responseData?.trips?.length) return new Map<string, string>()
@@ -193,6 +221,69 @@ export function VrpGantt({ responseData, className, highlightedJob, onJobHover }
   const hasPreviousDate = selectedDateIndex > 0
   const hasNextDate = selectedDateIndex < availableDates.length - 1
 
+  // Drag-and-drop handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    const id = event.active.id as string
+
+    // Extract resource and job from sortableId format: "resourceName-jobName-index"
+    const parts = id.split('-')
+    const resource = parts[0]
+    const jobId = parts.slice(1, -1).join('-') // Everything except first and last (exclude index)
+    const color = resourceColors.get(resource) || ROUTE_COLORS[0]
+
+    setActiveJobData({ jobId, resource, color })
+  }
+
+  const handleDragOver = (event: DragOverEvent) => {
+    if (event.over) {
+      const overData = event.over.data.current as { resource: string } | undefined
+      setDropTargetResource(overData?.resource || null)
+    } else {
+      setDropTargetResource(null)
+    }
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    setActiveJobData(null)
+    setDropTargetResource(null)
+
+    if (!over || !onJobReorder) return
+    if (active.id === over.id) return
+
+    const activeData = active.data.current as {
+      jobId: string
+      resource: string
+      index: number
+    }
+    const overData = over.data.current as {
+      jobId: string
+      resource: string
+      index: number
+    }
+
+    if (!activeData || !overData) return
+
+    // Determine afterJobId based on target position
+    let afterJobId: string | null = null
+    if (overData.index > 0) {
+      // Find the job before the target position
+      const targetTrip = filteredTrips.find(t => t.resource === overData.resource)
+      if (targetTrip?.visits && targetTrip.visits[overData.index - 1]) {
+        afterJobId = targetTrip.visits[overData.index - 1].job || null
+      }
+    }
+
+    onJobReorder({
+      jobId: activeData.jobId,
+      afterJobId,
+      fromResource: activeData.resource,
+      toResource: overData.resource,
+      fromIndex: activeData.index,
+      toIndex: overData.index,
+    })
+  }
+
   if (!responseData?.trips?.length) {
     return (
       <Card className={cn("w-full h-full flex items-center justify-center", className)}>
@@ -214,10 +305,16 @@ export function VrpGantt({ responseData, className, highlightedJob, onJobHover }
   }
 
   return (
-    <TooltipProvider>
-      <Card className={cn("w-full h-full flex flex-col p-0", className)}>
-        {/* Date navigation header */}
-        <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b">
+    <DndContext
+      collisionDetection={pointerWithin}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
+      <TooltipProvider>
+        <Card className={cn("w-full h-full flex flex-col p-0", className)}>
+          {/* Date navigation header */}
+          <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b">
           <span className="sr-only">Viewing date:</span>
           <Button
             variant="ghost"
@@ -277,11 +374,20 @@ export function VrpGantt({ responseData, className, highlightedJob, onJobHover }
                 const resourceName = trip.resource || 'Unknown'
                 const color = resourceColors.get(resourceName) || ROUTE_COLORS[0]
 
+                // Create sortable IDs for jobs in this trip
+                const jobIds = trip.visits?.map((v, i) =>
+                  `${resourceName}-${v.job}-${i}`
+                ) || []
+
                 return (
-                  <div
+                  <SortableContext
                     key={`${resourceName}-${tripIdx}`}
-                    className="flex hover:bg-muted/30 transition-colors"
+                    items={jobIds}
+                    strategy={horizontalListSortingStrategy}
                   >
+                    <div
+                      className="flex hover:bg-muted/30 transition-colors"
+                    >
                     {/* Vehicle label */}
                     <div className="w-32 flex-shrink-0 border-r p-2 flex items-center gap-2">
                       <div
@@ -298,6 +404,10 @@ export function VrpGantt({ responseData, className, highlightedJob, onJobHover }
                       className="flex-1 relative"
                       style={{ height: '48px' }}
                     >
+                      {/* Drop zone indicator */}
+                      {dropTargetResource === resourceName && (
+                        <div className="absolute inset-0 bg-primary/10 border-2 border-primary rounded pointer-events-none" />
+                      )}
                       {/* Hour grid lines */}
                       {timelineData.hours.map((_, idx) => (
                         <div
@@ -323,6 +433,7 @@ export function VrpGantt({ responseData, className, highlightedJob, onJobHover }
                         const durationMinutes = Math.round((departure - arrival) / (1000 * 60))
 
                         const jobName = visit.job || 'Unknown'
+                        const sortableId = `${resourceName}-${jobName}-${visitIdx}`
                         const isHighlighted = highlightedJob &&
                           highlightedJob.resource === resourceName &&
                           highlightedJob.job === jobName
@@ -330,23 +441,37 @@ export function VrpGantt({ responseData, className, highlightedJob, onJobHover }
                         const isDimmed = highlightedJob && !isHighlighted
 
                         return (
-                          <Tooltip key={visitIdx}>
-                            <TooltipTrigger asChild>
-                              <div
-                                className={cn(
-                                  "absolute top-1 h-8 rounded px-2 flex items-center text-white text-[10px] font-medium cursor-pointer transition-all shadow-sm",
-                                  isHighlighted && "ring-2 ring-white scale-110 z-10",
-                                  isDimmed && "opacity-40",
-                                  !highlightedJob && "hover:brightness-110"
-                                )}
-                                style={{
-                                  left: `${left}%`,
-                                  width: `${Math.max(width, 1)}%`,
-                                  backgroundColor: color,
-                                  minWidth: '32px'
-                                }}
-                                onMouseEnter={() => onJobHover?.({ resource: resourceName, job: jobName })}
-                                onMouseLeave={() => onJobHover?.(null)}
+                          <SortableItem
+                            key={sortableId}
+                            id={sortableId}
+                            disabled={isReordering}
+                            data={{
+                              jobId: jobName,
+                              resource: resourceName,
+                              index: visitIdx
+                            }}
+                          >
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className={cn(
+                                    "absolute top-1 h-8 rounded px-2 flex items-center text-white text-[10px] font-medium transition-all shadow-sm",
+                                    isHighlighted && "ring-2 ring-white scale-110 z-10",
+                                    isDimmed && "opacity-40",
+                                    !highlightedJob && !isReordering && "hover:brightness-110",
+                                    isReordering && "pointer-events-none opacity-50"
+                                  )}
+                                  style={{
+                                    left: `${left}%`,
+                                    width: `${Math.max(width, 1)}%`,
+                                    backgroundColor: color,
+                                    minWidth: '32px'
+                                  }}
+                                  onMouseEnter={() => !isReordering && onJobHover?.({ resource: resourceName, job: jobName })}
+                                  onMouseLeave={() => onJobHover?.(null)}
+                                  data-job-id={jobName}
+                                  data-resource={resourceName}
+                                  data-index={visitIdx}
                               >
                                 <span className="truncate">{jobName}</span>
                               </div>
@@ -371,10 +496,12 @@ export function VrpGantt({ responseData, className, highlightedJob, onJobHover }
                               </div>
                             </TooltipContent>
                           </Tooltip>
+                          </SortableItem>
                         )
                       })}
                     </div>
                   </div>
+                  </SortableContext>
                 )
               })}
             </div>
@@ -382,5 +509,22 @@ export function VrpGantt({ responseData, className, highlightedJob, onJobHover }
         </CardContent>
       </Card>
     </TooltipProvider>
+
+    {/* Drag overlay for visual feedback */}
+    <DragOverlay>
+      {activeJobData ? (
+        <div
+          className="h-8 rounded px-2 flex items-center text-white text-[10px] font-medium shadow-2xl ring-2 ring-primary/50"
+          style={{
+            backgroundColor: activeJobData.color,
+            width: '120px',
+            maxWidth: '200px'
+          }}
+        >
+          <span className="truncate">{activeJobData.jobId}</span>
+        </div>
+      ) : null}
+    </DragOverlay>
+  </DndContext>
   )
 }

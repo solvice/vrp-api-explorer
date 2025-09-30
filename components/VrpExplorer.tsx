@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
 import { VrpMap } from './VrpMap'
-import { VrpGantt } from './VrpGantt'
+import { VrpGantt, JobReorderEvent } from './VrpGantt'
 import { VrpKpiBar } from './VrpKpiBar'
 import { VrpAssistantContainer } from './VrpAssistant/VrpAssistantContainer'
 import { VrpApiError } from '@/lib/vrp-api'
@@ -37,6 +37,9 @@ export function VrpExplorer() {
 
   // Highlighted job state for hover interactions between map and gantt
   const [highlightedJob, setHighlightedJob] = useState<{ resource: string; job: string } | null>(null)
+
+  // Reordering state
+  const [isReordering, setIsReordering] = useState(false)
 
   // API status - always configured since keys are server-side
   const apiKeyStatus = {
@@ -206,6 +209,84 @@ export function VrpExplorer() {
     }
   }, [searchParams, jobState.loadedJobId, handleLoadJob, router])
 
+  // Handle job reordering with Solvice Change API
+  const handleJobReorder = useCallback(async (event: JobReorderEvent) => {
+    console.log('Job reorder requested:', event)
+
+    const originalSolutionId = vrpResponse.data?.id
+
+    if (!originalSolutionId) {
+      toast.error('No solution ID available for reordering')
+      return
+    }
+
+    setIsReordering(true)
+
+    try {
+      const toastId = toast.loading('Re-optimizing routes...')
+
+      // Call Change API in solve mode for full re-optimization
+      const response = await fetch('/api/vrp/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: event.jobId,
+          afterJobId: event.afterJobId,
+          operation: 'solve',  // Full re-optimization mode
+          originalSolutionId
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new VrpApiError(
+          errorData.error || 'Reorder failed',
+          errorData.type || 'unknown'
+        )
+      }
+
+      const { solution, scoreComparison, feasibilityWarnings } = await response.json()
+
+      toast.dismiss(toastId)
+
+      // Show score comparison if available
+      if (scoreComparison) {
+        const deltaMsg = scoreComparison.delta > 0
+          ? `${scoreComparison.delta} points worse`
+          : `${Math.abs(scoreComparison.delta)} points better`
+
+        toast.success(
+          `Routes re-optimized! Score: ${scoreComparison.modified} (${deltaMsg})`,
+          { duration: 5000 }
+        )
+      } else {
+        toast.success('Routes re-optimized successfully!')
+      }
+
+      // Warn about constraint violations
+      if (feasibilityWarnings?.length) {
+        toast.warning(
+          `Warning: ${feasibilityWarnings.length} constraint violation(s) detected`,
+          { duration: 5000 }
+        )
+      }
+
+      // Update solution state
+      setVrpResponse(prev => ({ ...prev, data: solution }))
+
+    } catch (error) {
+      toast.dismiss()
+
+      if (error instanceof VrpApiError) {
+        toast.error(error.message)
+      } else {
+        toast.error('Failed to reorder job')
+        console.error('Reorder error:', error)
+      }
+    } finally {
+      setIsReordering(false)
+    }
+  }, [vrpResponse.data])
 
   return (
     <>
@@ -252,6 +333,8 @@ export function VrpExplorer() {
               responseData={vrpResponse.data}
               highlightedJob={highlightedJob}
               onJobHover={setHighlightedJob}
+              onJobReorder={handleJobReorder}
+              isReordering={isReordering}
             />
           ) : undefined
         }
