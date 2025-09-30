@@ -1,4 +1,5 @@
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
+import { JobExplanationResponse } from 'solvice-vrp-solver/resources/vrp/jobs'
 
 export type VrpApiErrorType = 
   | 'authentication' 
@@ -108,6 +109,37 @@ export class VrpApiClient {
           // No longer need Authorization header - API key is handled server-side
         },
         body: JSON.stringify(request)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new VrpApiError(
+          errorData.error || 'Request failed',
+          errorData.type || 'unknown'
+        )
+      }
+
+      return await response.json()
+    } catch (error) {
+      if (error instanceof VrpApiError) {
+        throw error
+      }
+      // Map other errors
+      const vrpError = this.mapError(error as Error)
+      throw vrpError
+    }
+  }
+
+  /**
+   * Get explanation for a VRP job using local API route
+   */
+  async getExplanation(jobId: string): Promise<JobExplanationResponse> {
+    try {
+      const response = await fetch(`/api/vrp/explanation/${jobId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
       })
 
       if (!response.ok) {

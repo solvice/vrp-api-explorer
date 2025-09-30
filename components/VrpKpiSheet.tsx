@@ -1,6 +1,7 @@
 'use client'
 
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
+import { JobExplanationResponse } from 'solvice-vrp-solver/resources/vrp/jobs'
 import {
   Sheet,
   SheetContent,
@@ -12,11 +13,12 @@ import { VrpKpiPanel } from './VrpKpiPanel'
 interface VrpKpiSheetProps {
   responseData: Vrp.OnRouteResponse | null
   requestData: Record<string, unknown>
+  explanation: JobExplanationResponse | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function VrpKpiSheet({ responseData, requestData, open, onOpenChange }: VrpKpiSheetProps) {
+export function VrpKpiSheet({ responseData, requestData, explanation, open, onOpenChange }: VrpKpiSheetProps) {
   if (!responseData) return null
 
   return (
@@ -30,6 +32,7 @@ export function VrpKpiSheet({ responseData, requestData, open, onOpenChange }: V
             <VrpKpiPanel
               responseData={responseData}
               requestData={requestData}
+              explanation={explanation}
               className="w-full shadow-none border-0"
             />
           </div>

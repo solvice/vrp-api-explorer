@@ -12,6 +12,7 @@ import { VrpApiError } from '@/lib/vrp-api'
 import { getSampleVrpData, SampleType } from '@/lib/sample-data'
 import { ValidationResult } from '@/lib/vrp-schema'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
+import { JobExplanationResponse } from 'solvice-vrp-solver/resources/vrp/jobs'
 import { toast, Toaster } from 'sonner'
 
 export function VrpExplorer() {
@@ -24,9 +25,10 @@ export function VrpExplorer() {
     validation: { valid: true, errors: [] } as ValidationResult
   })
 
-  // VRP Response state (solution and loading)
+  // VRP Response state (solution, explanation, and loading)
   const [vrpResponse, setVrpResponse] = useState({
     data: null as Vrp.OnRouteResponse | null,
+    explanation: null as JobExplanationResponse | null,
     isLoading: false
   })
 
@@ -169,7 +171,7 @@ export function VrpExplorer() {
       // Replace request data
       if (result.request) {
         setVrpRequest(prev => ({ ...prev, data: result.request }))
-        setVrpResponse(prev => ({ ...prev, data: null })) // Clear any existing solution
+        setVrpResponse(prev => ({ ...prev, data: null, explanation: null })) // Clear any existing solution and explanation
       }
 
       // Load solution if available
@@ -177,6 +179,13 @@ export function VrpExplorer() {
         setVrpResponse(prev => ({ ...prev, data: result.solution }))
       } else if (result.solutionError) {
         toast.info(result.solutionError)
+      }
+
+      // Load explanation if available
+      if (result.explanation) {
+        setVrpResponse(prev => ({ ...prev, explanation: result.explanation }))
+      } else if (result.explanationError) {
+        console.info('Explanation:', result.explanationError)
       }
 
       // Update URL and state
@@ -323,6 +332,7 @@ export function VrpExplorer() {
             <VrpKpiBar
               responseData={vrpResponse.data}
               requestData={vrpRequest.data as unknown as Record<string, unknown>}
+              explanation={vrpResponse.explanation}
             />
           ) : undefined
         }

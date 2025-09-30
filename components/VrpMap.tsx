@@ -174,7 +174,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
 
   // Handle highlighting when highlightedJob changes
   useEffect(() => {
-    markerManager.current.updateHighlighting(highlightedJob)
+    markerManager.current.updateHighlighting(highlightedJob ?? null)
   }, [highlightedJob])
 
   // Style switcher component

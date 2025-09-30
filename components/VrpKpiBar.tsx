@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from 'react'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
+import { JobExplanationResponse } from 'solvice-vrp-solver/resources/vrp/jobs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { VrpKpiSheet } from './VrpKpiSheet'
 import {
   CheckCircle2,
@@ -15,16 +17,26 @@ import {
   Clock,
   TrendingUp,
   AlertTriangle,
-  ChevronRight
+  ChevronRight,
+  Info
 } from 'lucide-react'
 
 interface VrpKpiBarProps {
   responseData: Vrp.OnRouteResponse | null
   requestData: Record<string, unknown>
+  explanation: JobExplanationResponse | null
 }
 
-export function VrpKpiBar({ responseData, requestData }: VrpKpiBarProps) {
+export function VrpKpiBar({ responseData, requestData, explanation }: VrpKpiBarProps) {
   const [isSheetOpen, setIsSheetOpen] = useState(false)
+
+  // Calculate explanation summary
+  const explanationSummary = useMemo(() => {
+    if (!explanation) return { conflicts: 0, unresolved: 0, total: 0 }
+    const conflicts = explanation.conflicts ? 1 : 0
+    const unresolved = explanation.unresolved ? 1 : 0
+    return { conflicts, unresolved, total: conflicts + unresolved }
+  }, [explanation])
 
   // Calculate KPIs using useMemo
   const kpis = useMemo(() => {
@@ -144,6 +156,33 @@ export function VrpKpiBar({ responseData, requestData }: VrpKpiBarProps) {
           <span className="text-xs text-muted-foreground">occupancy</span>
         </div>
 
+        {/* Explanation Indicator */}
+        {explanation && (
+          <>
+            <Separator orientation="vertical" className="h-6" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant={explanationSummary.total > 0 ? "destructive" : "secondary"}
+                  className="gap-1 h-7 cursor-help"
+                >
+                  <Info className="h-3 w-3" />
+                  <span className="text-xs">
+                    {explanationSummary.total > 0 ? `${explanationSummary.total} issues` : 'Explained'}
+                  </span>
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {explanationSummary.total > 0
+                    ? 'Solution has conflicts - click Details for more info'
+                    : 'Explanation data available'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </>
+        )}
+
         {/* Spacer */}
         <div className="flex-1" />
 
@@ -164,6 +203,7 @@ export function VrpKpiBar({ responseData, requestData }: VrpKpiBarProps) {
       <VrpKpiSheet
         responseData={responseData}
         requestData={requestData}
+        explanation={explanation}
         open={isSheetOpen}
         onOpenChange={setIsSheetOpen}
       />

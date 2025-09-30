@@ -49,10 +49,11 @@ export async function GET(
     // Initialize SDK client
     const client = new SolviceVrpSolver({ apiKey: apiKey })
 
-    // Fetch request and solution simultaneously using SDK
-    const [requestResponse, solutionResponse] = await Promise.allSettled([
+    // Fetch request, solution, and explanation simultaneously using SDK
+    const [requestResponse, solutionResponse, explanationResponse] = await Promise.allSettled([
       client.vrp.jobs.retrieve(jobId),
-      client.vrp.jobs.solution(jobId)
+      client.vrp.jobs.solution(jobId),
+      client.vrp.jobs.explanation(jobId)
     ])
 
     // Handle request fetch result
@@ -82,10 +83,28 @@ export async function GET(
       }
     }
 
+    // Handle explanation fetch result (may not exist yet)
+    let explanationData = null
+    let explanationError = null
+
+    if (explanationResponse.status === 'fulfilled') {
+      explanationData = explanationResponse.value
+    } else {
+      // Check if it's a 404 (explanation not ready) or other error
+      const error = explanationResponse.reason
+      if (error?.status === 404) {
+        explanationError = 'Explanation not ready yet'
+      } else {
+        explanationError = 'Failed to fetch explanation'
+      }
+    }
+
     return NextResponse.json({
       request: requestData,
       solution: solutionData,
-      solutionError
+      solutionError,
+      explanation: explanationData,
+      explanationError
     }, {
       headers: createRateLimitHeaders(rateLimitResult)
     })

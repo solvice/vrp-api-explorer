@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
+import { JobExplanationResponse } from 'solvice-vrp-solver/resources/vrp/jobs'
 import { cn } from '@/lib/utils'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   CheckCircle2,
   XCircle,
@@ -20,18 +22,20 @@ import {
   ChevronUp,
   Users,
   Truck,
-  Target
+  Target,
+  Info,
+  AlertCircle
 } from 'lucide-react'
 
 interface VrpKpiPanelProps {
   responseData: Vrp.OnRouteResponse
   requestData: Record<string, unknown>
+  explanation: JobExplanationResponse | null
   className?: string
 }
 
-export function VrpKpiPanel({ responseData, requestData, className }: VrpKpiPanelProps) {
+export function VrpKpiPanel({ responseData, requestData, explanation, className }: VrpKpiPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true)
-  const [isScoreExpanded, setIsScoreExpanded] = useState(false)
 
   // Calculate KPIs using useMemo
   const kpis = useMemo(() => {
@@ -251,54 +255,60 @@ export function VrpKpiPanel({ responseData, requestData, className }: VrpKpiPane
             </>
           )}
 
-          {/* Score Details (Expandable) */}
+          {/* Score Details (Always Visible) */}
           {kpis.score && (
             <>
               <Separator />
               <div className="space-y-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full h-7 justify-between px-2 text-xs font-medium"
-                  onClick={() => setIsScoreExpanded(!isScoreExpanded)}
-                >
-                  <span>Score Details</span>
-                  {isScoreExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                </Button>
-
-                {isScoreExpanded && (
-                  <div className="space-y-1 px-2 py-1.5 bg-muted/50 rounded text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Hard Score:</span>
-                      <span className={cn(
-                        "font-medium",
-                        (kpis.score.hardScore || 0) < 0 ? "text-destructive" : "text-green-600"
-                      )}>
-                        {kpis.score.hardScore || 0}
-                      </span>
-                    </div>
-                    {typeof kpis.score.mediumScore === 'number' && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Medium Score:</span>
-                        <span className={cn(
-                          "font-medium",
-                          kpis.score.mediumScore < 0 ? "text-yellow-600" : "text-green-600"
-                        )}>
-                          {kpis.score.mediumScore}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Soft Score:</span>
-                      <span className={cn(
-                        "font-medium",
-                        (kpis.score.softScore || 0) < 0 ? "text-yellow-600" : "text-green-600"
-                      )}>
-                        {kpis.score.softScore || 0}
-                      </span>
-                    </div>
+                <div className="flex items-center gap-2 px-2">
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium">Score Details</span>
+                </div>
+                <div className="space-y-1 px-2 py-1.5 bg-muted/50 rounded text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Hard Score:</span>
+                    <span className={cn(
+                      "font-medium",
+                      (kpis.score.hardScore || 0) < 0 ? "text-destructive" : "text-green-600"
+                    )}>
+                      {kpis.score.hardScore || 0}
+                    </span>
                   </div>
-                )}
+                  {typeof kpis.score.mediumScore === 'number' && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Medium Score:</span>
+                      <span className={cn(
+                        "font-medium",
+                        kpis.score.mediumScore < 0 ? "text-yellow-600" : "text-green-600"
+                      )}>
+                        {kpis.score.mediumScore}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Soft Score:</span>
+                    <span className={cn(
+                      "font-medium",
+                      (kpis.score.softScore || 0) < 0 ? "text-yellow-600" : "text-green-600"
+                    )}>
+                      {kpis.score.softScore || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Explanation Section (Always Visible) */}
+          {explanation && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-2">
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium">Explanation</span>
+                </div>
+                <ExplanationContent explanation={explanation} />
               </div>
             </>
           )}
@@ -336,6 +346,86 @@ function KpiRow({
       <span className="text-xs font-semibold">{value}</span>
     </div>
   )
+}
+
+// Explanation content component
+function ExplanationContent({ explanation }: { explanation: JobExplanationResponse }) {
+  const hasConflicts = explanation.conflicts != null
+  const hasUnresolved = explanation.unresolved != null
+  const hasIssues = hasConflicts || hasUnresolved
+
+  return (
+    <div className="space-y-2 px-2">
+      {/* Conflicts Section */}
+      {hasConflicts && explanation.conflicts && (
+        <Alert variant="destructive" className="text-xs py-2">
+          <AlertTriangle className="h-3 w-3" />
+          <AlertTitle className="text-xs mb-1">Conflicts</AlertTitle>
+          <AlertDescription>
+            <ConflictItem conflict={explanation.conflicts} />
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Unresolved Constraints */}
+      {hasUnresolved && explanation.unresolved && (
+        <Alert variant="default" className="text-xs py-2">
+          <AlertCircle className="h-3 w-3" />
+          <AlertTitle className="text-xs mb-1">Unresolved</AlertTitle>
+          <AlertDescription>
+            <UnresolvedItem item={explanation.unresolved} />
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* No Issues - Success State */}
+      {!hasIssues && (
+        <Alert variant="default" className="text-xs py-2">
+          <CheckCircle2 className="h-3 w-3 text-green-600" />
+          <AlertTitle className="text-xs mb-1">No Issues Detected</AlertTitle>
+          <AlertDescription>
+            Solution meets all constraints
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  )
+}
+
+// Conflict item component
+function ConflictItem({ conflict }: { conflict: NonNullable<JobExplanationResponse['conflicts']> }) {
+  return (
+    <div className="p-1.5 bg-destructive/5 rounded text-[11px]">
+      <div className="space-y-0.5">
+        <div className="font-medium">{formatConstraintName(conflict.constraint)}</div>
+        {conflict.job && (
+          <div className="text-muted-foreground">Job: {conflict.job}</div>
+        )}
+        {conflict.resource && (
+          <div className="text-muted-foreground">Resource: {conflict.resource}</div>
+        )}
+        <div className="text-destructive/80">Score impact: {conflict.score}</div>
+      </div>
+    </div>
+  )
+}
+
+// Unresolved item component
+function UnresolvedItem({ item }: { item: NonNullable<JobExplanationResponse['unresolved']> }) {
+  return (
+    <div className="flex items-start justify-between p-1.5 bg-muted/50 rounded text-[11px]">
+      <span className="font-medium">{formatConstraintName(item.constraint)}</span>
+      <span className="text-muted-foreground">Impact: {item.score}</span>
+    </div>
+  )
+}
+
+// Helper to format constraint names
+function formatConstraintName(constraint: string): string {
+  return constraint
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase())
 }
 
 // Helper function to format duration in seconds to human readable format
