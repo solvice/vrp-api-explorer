@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
 import { VrpMap } from './VrpMap'
-import { VrpAssistantPane } from './VrpAssistant/VrpAssistantPane'
+import { VrpAssistantContainer } from './VrpAssistant/VrpAssistantContainer'
 import { VrpApiError } from '@/lib/vrp-api'
 import { getSampleVrpData, SampleType } from '@/lib/sample-data'
 import { ValidationResult } from '@/lib/vrp-schema'
@@ -219,10 +219,9 @@ export function VrpExplorer() {
             responseData={responseData}
           />
         }
-        rightPanel={
-          <VrpAssistantPane />
-        }
       />
+
+      <VrpAssistantContainer />
 
       <Toaster
         position="bottom-right"

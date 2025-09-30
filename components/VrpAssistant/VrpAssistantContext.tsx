@@ -12,6 +12,7 @@ interface VrpAssistantContextType {
   messages: Message[]
   vrpData: Vrp.VrpSyncSolveParams | null
   input: string
+  isOpen: boolean
   setProcessing: (processing: boolean) => void
   addMessage: (role: 'user' | 'assistant' | 'system', content: string, executionMetadata?: ExecutionMetadata) => void
   clearMessages: () => void
@@ -23,6 +24,9 @@ interface VrpAssistantContextType {
   handleSubmit: (e?: React.FormEvent) => void
   onVrpDataUpdate?: (data: Vrp.VrpSyncSolveParams) => void
   setOnVrpDataUpdate: (callback: (data: Vrp.VrpSyncSolveParams) => void) => void
+  toggleAssistant: () => void
+  openAssistant: () => void
+  closeAssistant: () => void
 }
 
 const VrpAssistantContext = createContext<VrpAssistantContextType | undefined>(undefined)
@@ -36,6 +40,7 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [vrpData, setVrpDataState] = useState<Vrp.VrpSyncSolveParams | null>(null)
   const [input, setInput] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
   const [openAIService] = useState<OpenAIService | null>(null)
   const [onVrpDataUpdate, setOnVrpDataUpdateState] = useState<((data: Vrp.VrpSyncSolveParams) => void) | undefined>()
 
@@ -339,11 +344,25 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
     }
   }
 
+  // Assistant toggle functions
+  const toggleAssistant = () => {
+    setIsOpen(!isOpen)
+  }
+
+  const openAssistant = () => {
+    setIsOpen(true)
+  }
+
+  const closeAssistant = () => {
+    setIsOpen(false)
+  }
+
   const value: VrpAssistantContextType = {
     isProcessing,
     messages,
     vrpData,
     input,
+    isOpen,
     setProcessing,
     addMessage,
     clearMessages,
@@ -354,7 +373,10 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
     handleInputChange,
     handleSubmit,
     onVrpDataUpdate,
-    setOnVrpDataUpdate
+    setOnVrpDataUpdate,
+    toggleAssistant,
+    openAssistant,
+    closeAssistant
   }
 
   return (

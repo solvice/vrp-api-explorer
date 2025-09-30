@@ -11,20 +11,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 interface VrpLayoutProps {
   leftPanel: ReactNode
   centerPanel: ReactNode
-  rightPanel: ReactNode
   leftPanelSize?: number
-  rightPanelSize?: number
 }
 
 export function VrpLayout({
   leftPanel,
   centerPanel,
-  rightPanel,
-  leftPanelSize = 35,
-  rightPanelSize = 25
+  leftPanelSize = 50
 }: VrpLayoutProps) {
   const [isMobile, setIsMobile] = useState(false)
-  const centerPanelSize = 100 - leftPanelSize - rightPanelSize
+  const centerPanelSize = 100 - leftPanelSize
 
   useEffect(() => {
     const checkIsMobile = () => {
@@ -47,15 +43,12 @@ export function VrpLayout({
     return (
       <div className="flex flex-col h-screen bg-background">
         <Tabs defaultValue="editor" className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="editor" className="text-sm">
               JSON Editor
             </TabsTrigger>
             <TabsTrigger value="map" className="text-sm">
               Map
-            </TabsTrigger>
-            <TabsTrigger value="chat" className="text-sm">
-              AI Chat
             </TabsTrigger>
           </TabsList>
 
@@ -68,12 +61,6 @@ export function VrpLayout({
           <TabsContent value="map" className="flex-1 mt-0 border-0 p-0">
             <div className="h-full">
               {centerPanel}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="chat" className="flex-1 mt-0 border-0 p-0">
-            <div className="h-full">
-              {rightPanel}
             </div>
           </TabsContent>
         </Tabs>
@@ -89,8 +76,8 @@ export function VrpLayout({
       >
         <ResizablePanel
           defaultSize={leftPanelSize}
-          minSize={25}
-          maxSize={50}
+          minSize={30}
+          maxSize={70}
         >
           <div className="h-full border-r">
             {leftPanel}
@@ -102,22 +89,10 @@ export function VrpLayout({
         <ResizablePanel
           defaultSize={centerPanelSize}
           minSize={30}
-          maxSize={50}
-        >
-          <div className="h-full border-r">
-            {centerPanel}
-          </div>
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
-
-        <ResizablePanel
-          defaultSize={rightPanelSize}
-          minSize={20}
-          maxSize={40}
+          maxSize={70}
         >
           <div className="h-full">
-            {rightPanel}
+            {centerPanel}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
