@@ -78,14 +78,15 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
 
   // Render map data (markers and routes)
   const renderMapData = useCallback(() => {
-    if (!map.current || !map.current.isStyleLoaded()) {
-      console.log('⏳ VrpMap: Style not loaded yet, waiting...')
+    if (!map.current) {
+      console.log('⏳ VrpMap: Map not initialized yet')
       return
     }
 
     console.log('🗺️ VrpMap: Rendering data', {
       hasRequestData: !!requestData,
-      hasResponseData: !!responseData
+      hasResponseData: !!responseData,
+      isStyleLoaded: map.current.isStyleLoaded()
     })
 
     // Clear existing visualizations
