@@ -154,7 +154,7 @@ export class MapRouteRenderer {
     requestData: Record<string, unknown>,
     resourceColors: Map<string, string>
   ): void {
-    if (!trips || !this.map.isStyleLoaded()) return
+    if (!trips) return
 
     trips.forEach((trip, tripIndex) => {
       const resourceName = trip.resource || 'Unknown'

@@ -421,7 +421,8 @@ function UnresolvedItem({ item }: { item: NonNullable<JobExplanationResponse['un
 }
 
 // Helper to format constraint names
-function formatConstraintName(constraint: string): string {
+function formatConstraintName(constraint: string | undefined | null): string {
+  if (!constraint) return 'Unknown Constraint'
   return constraint
     .replace(/_/g, ' ')
     .toLowerCase()
