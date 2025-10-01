@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { rateLimiters, createRateLimitHeaders } from '@/lib/rate-limiter'
+import { costGuardian } from '@/lib/cost-guardian'
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,6 +36,23 @@ export async function POST(request: NextRequest) {
     // Parse request body
     const { messages, model = 'gpt-4o', max_tokens = 2000, temperature = 0.3, response_format } = await request.json()
 
+    // Check daily budget before making expensive OpenAI call
+    // Conservative estimate: ~$0.05 for gpt-4o request
+    const estimatedCost = model === 'gpt-4o' ? 0.05 : 0.01
+    const budgetCheck = costGuardian.checkBudget(estimatedCost)
+
+    if (!budgetCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: budgetCheck.reason,
+          type: 'budget_exceeded',
+          currentSpend: budgetCheck.currentSpend,
+          budgetLimit: budgetCheck.budgetLimit,
+        },
+        { status: 429 }
+      )
+    }
+
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json(
         { error: 'Invalid request: messages array is required' },
@@ -64,9 +82,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Record actual cost after successful call
+    if (completion.usage) {
+      const MODEL_PRICING = {
+        'gpt-4o': { input: 2.50, output: 10.00 },
+        'gpt-4o-mini': { input: 0.15, output: 0.60 },
+      };
+
+      const pricing = MODEL_PRICING[model as keyof typeof MODEL_PRICING] || MODEL_PRICING['gpt-4o'];
+      const actualCost = (
+        (completion.usage.prompt_tokens * pricing.input / 1_000_000) +
+        (completion.usage.completion_tokens * pricing.output / 1_000_000)
+      );
+
+      costGuardian.recordCost(actualCost);
+
+      console.log(`💰 OpenAI request: ${completion.usage.total_tokens} tokens, $${actualCost.toFixed(4)}`);
+    }
+
     return NextResponse.json({
       content,
-      usage: completion.usage
+      usage: completion.usage,
+      budget: {
+        remaining: budgetCheck.budgetRemaining,
+        limit: budgetCheck.budgetLimit,
+      }
     }, {
       headers: createRateLimitHeaders(rateLimitResult)
     })

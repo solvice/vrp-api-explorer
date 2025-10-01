@@ -119,18 +119,25 @@ export function rateLimit(config: RateLimitConfig) {
 
 /**
  * Pre-configured rate limiters for different API endpoints
+ * DEMO LIMITS: Tightened for public demo to prevent abuse
  */
 export const rateLimiters = {
-  // OpenAI API: 10 requests per 10 minutes
+  // OpenAI API: 5 requests per 15 minutes (reduced for demo)
   openai: rateLimit({
-    maxRequests: 10,
-    windowMs: 10 * 60 * 1000, // 10 minutes
+    maxRequests: 5,
+    windowMs: 15 * 60 * 1000, // 15 minutes
   }),
 
-  // VRP API: 30 requests per 10 minutes (more generous for solve operations)
+  // VRP API: 10 requests per 15 minutes (tightened for demo)
   vrp: rateLimit({
-    maxRequests: 30,
-    windowMs: 10 * 60 * 1000, // 10 minutes
+    maxRequests: 10,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+  }),
+
+  // Daily limit across all endpoints: 50 requests per 24 hours
+  daily: rateLimit({
+    maxRequests: 50,
+    windowMs: 24 * 60 * 60 * 1000, // 24 hours
   }),
 
   // Debug endpoint: 5 requests per minute

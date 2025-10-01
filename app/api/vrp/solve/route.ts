@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { SolviceVrpSolver } from 'solvice-vrp-solver'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { rateLimiters, createRateLimitHeaders } from '@/lib/rate-limiter'
+import { validateComplexity, getComplexityErrorMessage } from '@/lib/vrp-complexity-validator'
+import { sanitizeVrpInput } from '@/lib/input-sanitizer'
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,7 +38,58 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const requestData: Vrp.VrpSyncSolveParams = await request.json()
+    const rawRequestData: Vrp.VrpSyncSolveParams = await request.json()
+
+    // Sanitize input to prevent injection attacks
+    const sanitizationResult = sanitizeVrpInput(rawRequestData)
+
+    if (!sanitizationResult.valid) {
+      return NextResponse.json(
+        {
+          error: 'Invalid VRP data',
+          message: 'Input validation failed',
+          type: 'validation_error',
+          details: {
+            errors: sanitizationResult.errors,
+            warnings: sanitizationResult.warnings,
+          }
+        },
+        { status: 400 }
+      )
+    }
+
+    // Log warnings
+    if (sanitizationResult.warnings.length > 0) {
+      console.warn('⚠️  VRP input warnings:', sanitizationResult.warnings)
+    }
+
+    // Use sanitized data
+    const requestData = sanitizationResult.sanitized!
+
+    // Validate complexity before solving
+    const complexityCheck = validateComplexity(requestData)
+
+    if (!complexityCheck.valid) {
+      const errorMessage = getComplexityErrorMessage(complexityCheck)
+
+      return NextResponse.json(
+        {
+          error: errorMessage,
+          type: 'complexity_limit',
+          details: {
+            errors: complexityCheck.errors,
+            warnings: complexityCheck.warnings,
+            actualComplexity: complexityCheck.actualComplexity,
+          }
+        },
+        { status: 400 }
+      )
+    }
+
+    // Log warnings if approaching limits
+    if (complexityCheck.warnings.length > 0) {
+      console.warn('⚠️  VRP complexity warnings:', complexityCheck.warnings)
+    }
 
     // Initialize Solvice client
     const client = new SolviceVrpSolver({
