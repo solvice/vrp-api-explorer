@@ -84,7 +84,9 @@ export function VrpExplorer() {
         const errorData = await response.json()
         throw new VrpApiError(
           errorData.error || 'Request failed',
-          errorData.type || 'unknown'
+          errorData.type || 'unknown',
+          undefined,
+          errorData.details
         )
       }
 
@@ -105,15 +107,34 @@ export function VrpExplorer() {
       toast.dismiss()
 
       if (error instanceof VrpApiError) {
-        toast.error(error.message)
+        // Format error message with details
+        let errorMessage = error.message
 
-        // Handle specific error types
+        if (error.details?.errors && error.details.errors.length > 0) {
+          errorMessage += ':\n' + error.details.errors.map(e => `• ${e}`).join('\n')
+        }
+
+        toast.error(errorMessage, {
+          duration: 8000,
+          style: { whiteSpace: 'pre-line' }
+        })
+
+        // Show warnings if present
+        if (error.details?.warnings && error.details.warnings.length > 0) {
+          error.details.warnings.forEach(warning => {
+            toast.warning(warning, { duration: 6000 })
+          })
+        }
+
+        // Handle specific error types with additional context
         switch (error.type) {
           case 'authentication':
             toast.error('Check server-side API key configuration')
             break
           case 'validation':
-            toast.error('Please check your request data format')
+            if (!error.details?.errors?.length) {
+              toast.error('Please check your request data format')
+            }
             break
           case 'network':
             toast.error('Please check your internet connection')

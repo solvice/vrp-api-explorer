@@ -16,12 +16,12 @@ export function LoadJobButton({ onClick, disabled = false }: LoadJobButtonProps)
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0"
+          className="h-8 w-8 p-0"
           onClick={onClick}
           disabled={disabled}
           aria-label="Load Job"
         >
-          <Download className="h-3 w-3" />
+          <Download className="h-4 w-4" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>

@@ -343,32 +343,32 @@ function VrpJsonEditorContent({
   const renderValidationStatus = () => {
     if (isLoading) {
       return (
-        <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span data-testid="editor-loading">Validating...</span>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span data-testid="editor-loading">Validating</span>
         </div>
       )
     }
 
     if (parseError) {
       return (
-        <div className="flex items-center space-x-2 text-sm">
-          <XCircle className="h-4 w-4 text-red-600" />
+        <div className="flex items-center gap-1.5 text-xs">
+          <XCircle className="h-3.5 w-3.5 text-red-600" />
           <span data-testid="validation-status" className="text-red-600">Parse Error</span>
         </div>
       )
     }
 
     return (
-      <div className="flex items-center space-x-2 text-sm">
+      <div className="flex items-center gap-1.5 text-xs">
         {validationResult.valid ? (
           <>
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            <CheckCircle className="h-3.5 w-3.5 text-green-600" />
             <span data-testid="validation-status" className="text-green-600">Valid</span>
           </>
         ) : (
           <>
-            <XCircle className="h-4 w-4 text-red-600" />
+            <XCircle className="h-3.5 w-3.5 text-red-600" />
             <span data-testid="validation-status" className="text-red-600">Invalid</span>
           </>
         )}
@@ -412,37 +412,12 @@ function VrpJsonEditorContent({
 
   const editorContent = (
     <div className={cn("flex flex-col h-full", className)}>
-        {/* Controls Header - Single Line */}
-        <div className="p-4 border-b bg-background">
+        {/* Single Consolidated Toolbar */}
+        <div className="px-3 py-2 border-b bg-background">
           <div className="flex items-center justify-between">
-            {/* Left side: Endpoint and Settings */}
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2">
-                <Label className="text-xs text-muted-foreground">Endpoint:</Label>
-                <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
-                  POST /v2/vrp/solve/sync
-                </code>
-              </div>
-
-              {/* Documentation Link Button */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => window.open('https://docs2.solvice.io', '_blank')}
-                    aria-label="Open Documentation"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>API Documentation</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* API Key Settings Button with Tooltip */}
+            {/* Left side: Action buttons and sample selector */}
+            <div className="flex items-center gap-2">
+              {/* API Key Settings Button */}
               {apiKeyStatus && (
                 <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                   <Tooltip>
@@ -451,9 +426,10 @@ function VrpJsonEditorContent({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0"
+                          className="h-8 w-8 p-0"
+                          aria-label="API Key Settings"
                         >
-                          <Settings className="h-3 w-3" />
+                          <Settings className="h-4 w-4" />
                         </Button>
                       </PopoverTrigger>
                     </TooltipTrigger>
@@ -558,6 +534,41 @@ function VrpJsonEditorContent({
                   disabled={isLoading}
                 />
               )}
+
+              {/* Separator */}
+              <div className="h-6 w-px bg-border mx-1" />
+
+              {/* Job Badge (if loaded) */}
+              {loadedJobId && onClearJob && (
+                <JobBadge
+                  jobId={loadedJobId}
+                  onClear={onClearJob}
+                />
+              )}
+
+              {/* Sample Selector */}
+              <Select value={currentSample} onValueChange={handleSampleChange}>
+                <SelectTrigger className="w-[200px] h-8 text-xs">
+                  <SelectValue>
+                    {(() => {
+                      const sample = SAMPLE_DATASETS.find(s => s.id === currentSample)
+                      return sample ? sample.name : "Select sample..."
+                    })()}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {SAMPLE_DATASETS.map((sample) => (
+                    <SelectItem key={sample.id} value={sample.id}>
+                      <div className="flex flex-col">
+                        <div className="font-medium">{sample.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {sample.description}
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Right side: Send Button */}
@@ -565,7 +576,7 @@ function VrpJsonEditorContent({
               onClick={onSend}
               disabled={!validationResult.valid || isLoading || parseError !== null}
               size="sm"
-              className="min-w-[80px]"
+              className="h-8"
             >
               {isLoading ? (
                 <>
@@ -582,42 +593,8 @@ function VrpJsonEditorContent({
           </div>
         </div>
 
-      {/* Request Editor */}
+      {/* Request Editor - Direct to Monaco */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between p-3 border-b bg-muted/50 relative">
-          <div className="flex items-center space-x-3">
-            <h3 className="text-sm font-medium">Request</h3>
-            {loadedJobId && onClearJob && (
-              <JobBadge
-                jobId={loadedJobId}
-                onClear={onClearJob}
-              />
-            )}
-            <Select value={currentSample} onValueChange={handleSampleChange}>
-              <SelectTrigger className="w-[200px] h-7 text-xs">
-                <SelectValue>
-                  {(() => {
-                    const sample = SAMPLE_DATASETS.find(s => s.id === currentSample)
-                    return sample ? sample.name : "Select sample..."
-                  })()}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {SAMPLE_DATASETS.map((sample) => (
-                  <SelectItem key={sample.id} value={sample.id}>
-                    <div className="flex flex-col">
-                      <div className="font-medium">{sample.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {sample.description}
-                      </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-        </div>
         
         <div className="flex-1 flex flex-col min-h-0 relative">
           <div className="flex-1 min-h-0" data-testid="json-editor">
@@ -658,14 +635,14 @@ function VrpJsonEditorContent({
               theme="vs"
             />
           </div>
-          
+
           {/* Floating Validation Status */}
           <div className="absolute bottom-3 right-3 z-10">
             <div className="bg-background/95 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-lg">
               {renderValidationStatus()}
             </div>
           </div>
-          
+
           {renderValidationErrors()}
         </div>
       </div>

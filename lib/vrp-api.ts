@@ -12,12 +12,19 @@ export type VrpApiErrorType =
 export class VrpApiError extends Error {
   public type: VrpApiErrorType
   public originalError?: Error
+   public details?: {
+    errors?: string[]
+    warnings?: string[]
+    actualComplexity?: Record<string, number>
+    [key: string]: unknown
+  }
 
-  constructor(message: string, type: VrpApiErrorType, originalError?: Error) {
+  constructor(message: string, type: VrpApiErrorType, originalError?: Error, details?: VrpApiError['details']) {
     super(message)
     this.name = 'VrpApiError'
     this.type = type
     this.originalError = originalError
+    this.details = details
   }
 }
 
@@ -115,7 +122,9 @@ export class VrpApiClient {
         const errorData = await response.json()
         throw new VrpApiError(
           errorData.error || 'Request failed',
-          errorData.type || 'unknown'
+          errorData.type || 'unknown',
+          undefined,
+          errorData.details
         )
       }
 
@@ -146,7 +155,9 @@ export class VrpApiClient {
         const errorData = await response.json()
         throw new VrpApiError(
           errorData.error || 'Request failed',
-          errorData.type || 'unknown'
+          errorData.type || 'unknown',
+          undefined,
+          errorData.details
         )
       }
 

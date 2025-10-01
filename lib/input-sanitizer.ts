@@ -17,10 +17,11 @@ export interface SanitizationResult {
 }
 
 /**
- * Pattern for safe names (alphanumeric, underscore, dash, space)
+ * Pattern for safe names (alphanumeric, common punctuation)
  * Prevents injection attacks via job/resource names
+ * Allows: letters, numbers, spaces, underscore, dash, dot, comma, parentheses, colon
  */
-const SAFE_NAME_PATTERN = /^[a-zA-Z0-9_\- ]+$/;
+const SAFE_NAME_PATTERN = /^[a-zA-Z0-9_\- .,():#@]+$/;
 const MAX_NAME_LENGTH = 100;
 
 /**
@@ -85,7 +86,7 @@ function sanitizeName(name: string, context: string): { valid: boolean; error?: 
   if (!SAFE_NAME_PATTERN.test(trimmed)) {
     return {
       valid: false,
-      error: `${context}: Name can only contain letters, numbers, spaces, underscores, and dashes`,
+      error: `${context}: Name contains invalid characters (only alphanumeric and .,()-_:#@ allowed)`,
       sanitized: '',
     };
   }
