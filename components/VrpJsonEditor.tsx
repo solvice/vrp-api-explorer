@@ -594,11 +594,11 @@ function VrpJsonEditorContent({
               />
             )}
             <Select value={currentSample} onValueChange={handleSampleChange}>
-              <SelectTrigger className="w-[300px] h-7 text-xs">
+              <SelectTrigger className="w-[200px] h-7 text-xs">
                 <SelectValue>
                   {(() => {
                     const sample = SAMPLE_DATASETS.find(s => s.id === currentSample)
-                    return sample ? `${sample.name}: ${sample.description}` : "Select sample..."
+                    return sample ? sample.name : "Select sample..."
                   })()}
                 </SelectValue>
               </SelectTrigger>

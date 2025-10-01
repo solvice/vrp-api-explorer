@@ -1,6 +1,6 @@
 import { Vrp } from "solvice-vrp-solver/resources/vrp/vrp";
 
-export type SampleType = 'simple' | 'big' | 'fieldService' | 'polylines'
+export type SampleType = 'simple' | 'lastMile' | 'fieldService' | 'homeHealth' | 'wasteLogistics'
 
 export interface SampleInfo {
   id: SampleType
@@ -20,10 +20,10 @@ export const SAMPLE_DATASETS: SampleInfo[] = [
     getData: getSimpleTspData
   },
   {
-    id: 'big',
-    name: 'Big Request',
-    description: '100 jobs, 3 vehicles - Large-scale routing optimization',
-    getData: getBigRequestData
+    id: 'lastMile',
+    name: 'Last Mile Delivery',
+    description: '100 packages, 2 vehicles - Urban last mile delivery optimization',
+    getData: getLastMileDeliveryData
   },
   {
     id: 'fieldService',
@@ -32,10 +32,16 @@ export const SAMPLE_DATASETS: SampleInfo[] = [
     getData: getFieldServiceData
   },
   {
-    id: 'polylines',
-    name: 'Route Polylines',
-    description: '15 deliveries, 1 vehicle with actual road geometry',
-    getData: getPolylinesData
+    id: 'homeHealth',
+    name: 'Home Healthcare',
+    description: '40 patient visits, 3 caregivers - Healthcare scheduling with skills and time windows',
+    getData: getHomeHealthData
+  },
+  {
+    id: 'wasteLogistics',
+    name: 'Waste Collection',
+    description: '60 collection points, 3 trucks - Municipal waste management with capacity and waste type constraints',
+    getData: getWasteLogisticsData
   }
 ]
 
@@ -211,26 +217,25 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
 }
 
 /**
- * Big Request: Large-scale routing optimization
- * Scenario: 100 jobs across greater Ghent area with 3 vehicles
+ * Last Mile Delivery: Urban package delivery optimization
+ * Scenario: 100 packages across Ghent area with 2 delivery vans
  */
-function getBigRequestData(): Vrp.VrpSyncSolveParams {
-  // Generate 100 jobs spread around Ghent area (51.0 ± 0.15, 3.7 ± 0.25)
+function getLastMileDeliveryData(): Vrp.VrpSyncSolveParams {
+  // Generate 100 package deliveries spread around Ghent area
   const jobs = []
-  const baseNames = [
-    'delivery', 'pickup', 'service', 'maintenance', 'installation', 'repair',
-    'consultation', 'inspection', 'cleaning', 'transport'
-  ]
-  
+  const packageTypes = ['small', 'medium', 'large']
+  const packageLoads = { small: 1, medium: 3, large: 5 } // Load units per package type
+
   for (let i = 1; i <= 100; i++) {
-    const baseName = baseNames[i % baseNames.length]
+    const packageType = packageTypes[Math.floor(Math.random() * packageTypes.length)]
     jobs.push({
-      name: `${baseName}_${String(i).padStart(3, '0')}`,
-      duration: 300 + Math.floor(Math.random() * 1200), // 5-25 minutes
+      name: `package_${String(i).padStart(3, '0')}`,
+      duration: 180 + Math.floor(Math.random() * 240), // 3-7 minutes per delivery
       location: {
-        latitude: 51.0 + (Math.random() - 0.5) * 0.3, // 50.85 to 51.15
-        longitude: 3.7 + (Math.random() - 0.5) * 0.5   // 3.45 to 3.95
-      }
+        latitude: 51.0 + (Math.random() - 0.5) * 0.2,   // Tighter urban area
+        longitude: 3.72 + (Math.random() - 0.5) * 0.2   // Around Ghent center
+      },
+      load: [packageLoads[packageType as keyof typeof packageLoads]]
     })
   }
 
@@ -238,21 +243,29 @@ function getBigRequestData(): Vrp.VrpSyncSolveParams {
     jobs,
     resources: [
       {
-        name: "vehicle_alpha",
-        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }]
+        name: "van_east",
+        capacity: [150], // Can carry ~50 medium packages
+        shifts: [{
+          from: "2024-01-15T08:00:00Z",
+          to: "2024-01-15T18:00:00Z",
+          start: { latitude: 51.0538, longitude: 3.7250 }, // Ghent depot
+          end: { latitude: 51.0538, longitude: 3.7250 }
+        }]
       },
       {
-        name: "vehicle_beta", 
-        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }]
-      },
-      {
-        name: "vehicle_gamma",
-        shifts: [{ from: "2024-01-15T06:00:00Z", to: "2024-01-15T20:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }]
+        name: "van_west",
+        capacity: [150], // Can carry ~50 medium packages
+        shifts: [{
+          from: "2024-01-15T08:00:00Z",
+          to: "2024-01-15T18:00:00Z",
+          start: { latitude: 51.0538, longitude: 3.7250 }, // Ghent depot
+          end: { latitude: 51.0538, longitude: 3.7250 }
+        }]
       }
     ],
     options: {
-      partialPlanning: true,
-      minimizeResources: true,
+      partialPlanning: false, // Deliver all packages
+      minimizeResources: false, // Use both vans efficiently
       polylines: true
     }
   }
@@ -266,26 +279,39 @@ function getFieldServiceData(): Vrp.VrpSyncSolveParams {
   // Generate 50 service jobs with time windows
   const jobs = []
   const serviceTypes = [
-    'hvac_maintenance', 'plumbing_repair', 'electrical_install', 'appliance_service',
-    'security_install', 'network_setup', 'solar_maintenance', 'heating_repair'
+    { type: 'hvac_maintenance', tag: 'hvac', hard: true },
+    { type: 'plumbing_repair', tag: 'plumbing', hard: true },
+    { type: 'electrical_install', tag: 'electrical', hard: true },
+    { type: 'appliance_service', tag: 'appliance', hard: false },
+    { type: 'security_install', tag: 'security', hard: true },
+    { type: 'network_setup', tag: 'network', hard: true },
+    { type: 'solar_maintenance', tag: 'solar', hard: true },
+    { type: 'heating_repair', tag: 'hvac', hard: true }
   ]
-  
+
   for (let i = 1; i <= 50; i++) {
-    const serviceType = serviceTypes[i % serviceTypes.length]
+    const service = serviceTypes[i % serviceTypes.length]
     const startHour = 8 + Math.floor(Math.random() * 9) // 8 AM to 5 PM start times
     const timeWindow = {
       from: `2024-01-15T${String(startHour).padStart(2, '0')}:00:00Z`,
       to: `2024-01-15T${String(startHour + 2).padStart(2, '0')}:00:00Z` // 2-hour window
     }
-    
+
     jobs.push({
-      name: `${serviceType}_${String(i).padStart(2, '0')}`,
+      name: `${service.type}_${String(i).padStart(2, '0')}`,
       duration: 1800 + Math.floor(Math.random() * 3600), // 30-90 minutes
       location: {
         latitude: 51.0 + (Math.random() - 0.5) * 0.2,   // Closer to city center
         longitude: 3.72 + (Math.random() - 0.5) * 0.15
       },
-      timeWindows: [timeWindow]
+      windows: [timeWindow],
+      tags: [
+        {
+          name: service.tag,
+          hard: service.hard,
+          weight: service.hard ? undefined : 3600 // 1 hour penalty for soft constraints
+        }
+      ]
     })
   }
 
@@ -294,14 +320,16 @@ function getFieldServiceData(): Vrp.VrpSyncSolveParams {
     resources: [
       {
         name: "technician_alice",
+        tags: ['hvac', 'plumbing', 'electrical', 'appliance'], // Multi-skilled technician
         shifts: [
           { from: "2024-01-15T07:00:00Z", to: "2024-01-15T15:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }, // Morning shift
-          { from: "2024-01-15T15:30:00Z", to: "2024-01-15T23:30:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }, // Evening shift  
+          { from: "2024-01-15T15:30:00Z", to: "2024-01-15T23:30:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }, // Evening shift
           { from: "2024-01-16T06:00:00Z", to: "2024-01-16T14:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }  // Next day morning
         ]
       },
       {
         name: "technician_bob",
+        tags: ['electrical', 'network', 'security', 'solar', 'appliance'], // Tech specialist
         shifts: [
           { from: "2024-01-15T08:00:00Z", to: "2024-01-15T16:00:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }, // Day shift
           { from: "2024-01-15T16:30:00Z", to: "2024-01-16T00:30:00Z", start: { latitude: 50.99, longitude: 3.81 }, end: { latitude: 50.99, longitude: 3.81 } }, // Night shift
@@ -317,43 +345,197 @@ function getFieldServiceData(): Vrp.VrpSyncSolveParams {
   }
 }
 
+
 /**
- * Get polylines-enabled sample data - similar to simple TSP but with polylines option
+ * Home Healthcare: Patient visit scheduling with caregiver skills
+ * Scenario: 40 patient visits with 3 caregivers providing different types of care
  */
-function getPolylinesData(): Vrp.VrpSyncSolveParams {
+function getHomeHealthData(): Vrp.VrpSyncSolveParams {
+  const jobs = []
+  const careTypes = [
+    { type: 'wound_care', tag: 'nursing', duration: 2400, hard: true },
+    { type: 'medication_admin', tag: 'nursing', duration: 1800, hard: true },
+    { type: 'physical_therapy', tag: 'physical_therapy', duration: 3600, hard: true },
+    { type: 'occupational_therapy', tag: 'occupational_therapy', duration: 3000, hard: true },
+    { type: 'vital_check', tag: 'nursing', duration: 1200, hard: false },
+    { type: 'companionship', tag: 'basic_care', duration: 3600, hard: false },
+    { type: 'meal_prep', tag: 'basic_care', duration: 1800, hard: false },
+    { type: 'bathing_assist', tag: 'basic_care', duration: 2400, hard: false }
+  ]
+
+  for (let i = 1; i <= 40; i++) {
+    const care = careTypes[i % careTypes.length]
+    const startHour = 8 + Math.floor(Math.random() * 8) // 8 AM to 4 PM start times
+    const preferredCaregiver = i % 3 === 0 ? 'caregiver_alice' : i % 3 === 1 ? 'caregiver_bob' : 'caregiver_carol'
+
+    jobs.push({
+      name: `patient_${String(i).padStart(2, '0')}_${care.type}`,
+      duration: care.duration,
+      location: {
+        latitude: 51.0 + (Math.random() - 0.5) * 0.15,   // Residential area spread
+        longitude: 3.72 + (Math.random() - 0.5) * 0.12
+      },
+      windows: [{
+        from: `2024-01-15T${String(startHour).padStart(2, '0')}:00:00Z`,
+        to: `2024-01-15T${String(startHour + 3).padStart(2, '0')}:00:00Z` // 3-hour window
+      }],
+      tags: [{
+        name: care.tag,
+        hard: care.hard,
+        weight: care.hard ? undefined : 1800 // 30 min penalty for soft constraints
+      }],
+      rankings: [{
+        name: preferredCaregiver,
+        ranking: 10 // Preferred caregiver
+      }],
+      priority: care.hard ? 2 : 1 // Higher priority for skilled nursing care
+    })
+  }
+
   return {
-    jobs: [
-      { name: "Brussels", duration: 900, location: { latitude: 50.8465, longitude: 4.3517 } },
-      { name: "Antwerp", duration: 900, location: { latitude: 51.2213, longitude: 4.4051 } },
-      { name: "Ghent", duration: 900, location: { latitude: 51.0538, longitude: 3.7250 } },
-      { name: "Bruges", duration: 900, location: { latitude: 51.2092, longitude: 3.2244 } },
-      { name: "Leuven", duration: 900, location: { latitude: 50.8798, longitude: 4.7005 } },
-      { name: "Mechelen", duration: 900, location: { latitude: 51.0281, longitude: 4.4778 } },
-      { name: "Aalst", duration: 900, location: { latitude: 50.9365, longitude: 4.0435 } },
-      { name: "Sint-Niklaas", duration: 900, location: { latitude: 51.1668, longitude: 4.1437 } },
-      { name: "Dendermonde", duration: 900, location: { latitude: 51.0281, longitude: 4.1016 } },
-      { name: "Kortrijk", duration: 900, location: { latitude: 50.8275, longitude: 3.2647 } },
-      { name: "Ostend", duration: 900, location: { latitude: 51.2172, longitude: 2.9083 } },
-      { name: "Roeselare", duration: 900, location: { latitude: 50.9494, longitude: 3.1228 } },
-      { name: "Turnhout", duration: 900, location: { latitude: 51.3226, longitude: 4.9447 } },
-      { name: "Hasselt", duration: 900, location: { latitude: 50.9307, longitude: 5.3378 } },
-      { name: "Genk", duration: 900, location: { latitude: 50.9658, longitude: 5.4978 } }
-    ],
+    jobs,
     resources: [
       {
-        name: "delivery_truck",
-        shifts: [
-          {
-            from: "2024-01-15T08:00:00Z",
-            to: "2024-01-15T18:00:00Z",
-            start: { latitude: 50.8465, longitude: 4.3517 }, // Start in Brussels
-            end: { latitude: 50.8465, longitude: 4.3517 }     // Return to Brussels
-          }
-        ]
+        name: "caregiver_alice",
+        tags: ['nursing', 'basic_care'], // Registered nurse
+        hourlyCost: 45,
+        shifts: [{
+          from: "2024-01-15T07:00:00Z",
+          to: "2024-01-15T15:00:00Z",
+          start: { latitude: 51.05, longitude: 3.72 },
+          end: { latitude: 51.05, longitude: 3.72 }
+        }]
+      },
+      {
+        name: "caregiver_bob",
+        tags: ['physical_therapy', 'basic_care'], // Physical therapist
+        hourlyCost: 50,
+        shifts: [{
+          from: "2024-01-15T08:00:00Z",
+          to: "2024-01-15T16:00:00Z",
+          start: { latitude: 51.04, longitude: 3.73 },
+          end: { latitude: 51.04, longitude: 3.73 }
+        }]
+      },
+      {
+        name: "caregiver_carol",
+        tags: ['occupational_therapy', 'nursing', 'basic_care'], // Multi-skilled OT/nurse
+        hourlyCost: 52,
+        shifts: [{
+          from: "2024-01-15T09:00:00Z",
+          to: "2024-01-15T17:00:00Z",
+          start: { latitude: 51.06, longitude: 3.71 },
+          end: { latitude: 51.06, longitude: 3.71 }
+        }]
       }
     ],
     options: {
-      polylines: true  // Enable polyline geometry in response
+      partialPlanning: false, // Visit all patients
+      minimizeResources: false,
+      polylines: true
+    },
+    weights: {
+      rankingWeight: 1.5, // Consider patient-caregiver preferences
+      priorityWeight: 2.0, // Prioritize skilled nursing care
+      travelTimeWeight: 1.0
+    }
+  }
+}
+
+/**
+ * Waste Collection: Municipal waste management with capacity constraints
+ * Scenario: 60 collection points with 3 specialized waste trucks
+ */
+function getWasteLogisticsData(): Vrp.VrpSyncSolveParams {
+  const jobs = []
+  const wasteTypes = [
+    { type: 'residential_general', tag: 'general_waste', load: 2, duration: 300 },
+    { type: 'residential_recycle', tag: 'recyclables', load: 1, duration: 240 },
+    { type: 'commercial_general', tag: 'general_waste', load: 5, duration: 600, timeWindow: true },
+    { type: 'commercial_recycle', tag: 'recyclables', load: 4, duration: 480, timeWindow: true },
+    { type: 'industrial_waste', tag: 'general_waste', load: 8, duration: 900, timeWindow: true },
+    { type: 'organic_waste', tag: 'organic', load: 3, duration: 360 }
+  ]
+
+  for (let i = 1; i <= 60; i++) {
+    const waste = wasteTypes[i % wasteTypes.length]
+    const job: Vrp.Job = {
+      name: `collection_${String(i).padStart(3, '0')}_${waste.type}`,
+      duration: waste.duration,
+      location: {
+        latitude: 51.0 + (Math.random() - 0.5) * 0.25,
+        longitude: 3.72 + (Math.random() - 0.5) * 0.25
+      },
+      load: [waste.load],
+      tags: [{
+        name: waste.tag,
+        hard: true
+      }]
+    }
+
+    // Add time windows for commercial/industrial pickups
+    if (waste.timeWindow) {
+      const startHour = 7 + Math.floor(Math.random() * 6) // 7 AM to 1 PM
+      job.windows = [{
+        from: `2024-01-15T${String(startHour).padStart(2, '0')}:00:00Z`,
+        to: `2024-01-15T${String(startHour + 4).padStart(2, '0')}:00:00Z`
+      }]
+    }
+
+    jobs.push(job)
+  }
+
+  return {
+    jobs,
+    resources: [
+      {
+        name: "truck_general_1",
+        tags: ['general_waste'],
+        capacity: [100], // Can handle ~20 residential or 12 commercial pickups
+        category: 'TRUCK',
+        hourlyCost: 60,
+        shifts: [{
+          from: "2024-01-15T06:00:00Z",
+          to: "2024-01-15T16:00:00Z",
+          start: { latitude: 51.0538, longitude: 3.7250 }, // Waste depot
+          end: { latitude: 51.0538, longitude: 3.7250 }
+        }]
+      },
+      {
+        name: "truck_recycle_1",
+        tags: ['recyclables'],
+        capacity: [80], // Can handle ~20 residential or 16 commercial recyclables
+        category: 'TRUCK',
+        hourlyCost: 55,
+        shifts: [{
+          from: "2024-01-15T06:00:00Z",
+          to: "2024-01-15T16:00:00Z",
+          start: { latitude: 51.0538, longitude: 3.7250 },
+          end: { latitude: 51.0538, longitude: 3.7250 }
+        }]
+      },
+      {
+        name: "truck_organic_1",
+        tags: ['organic'],
+        capacity: [60], // Can handle ~20 organic pickups
+        category: 'TRUCK',
+        hourlyCost: 58,
+        shifts: [{
+          from: "2024-01-15T06:00:00Z",
+          to: "2024-01-15T16:00:00Z",
+          start: { latitude: 51.0538, longitude: 3.7250 },
+          end: { latitude: 51.0538, longitude: 3.7250 }
+        }]
+      }
+    ],
+    options: {
+      partialPlanning: false, // Collect all waste
+      minimizeResources: false,
+      polylines: true
+    },
+    weights: {
+      travelTimeWeight: 1.0,
+      driveTimeWeight: 0.8 // Slight preference for reducing drive time
     }
   }
 }
