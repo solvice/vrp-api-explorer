@@ -6,6 +6,31 @@ import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
  */
 export class VrpSchemaService {
   /**
+   * Get a compact schema description for AI (optimized for token usage)
+   */
+  static getCompactSchemaForAI(): string {
+    return `# VRP Schema (Compact)
+
+**jobs[]**: Tasks to assign (required)
+- name (required): Unique ID
+- duration: Seconds (e.g., 600 = 10min)
+- location: {latitude, longitude}
+- windows: [{from: "ISO-datetime", to: "ISO-datetime", hard?: bool}]
+- priority: Higher = more important
+- load: [capacity_dim1, dim2, ...] for multi-dimensional capacity
+
+**resources[]**: Vehicles/workers (required)
+- name (required): Unique ID
+- shifts (required): [{from: "ISO-datetime", to: "ISO-datetime", start?: location, end?: location}]
+- capacity: [dim1, dim2, ...] matches job loads
+- tags: ["skill1", "skill2"] capabilities
+
+**options** (optional): {partialPlanning, polylines, routingEngine}
+
+**Rules**: Job/resource names unique, ISO datetimes (YYYY-MM-DDTHH:mm:ssZ), lat ∈[-90,90], lon ∈[-180,180]`;
+  }
+
+  /**
    * Get a comprehensive but token-optimized schema description for AI
    */
   static getSchemaForAI(): string {

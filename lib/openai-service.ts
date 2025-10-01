@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { VrpSchemaService } from "./vrp-schema-service";
 import { Vrp } from "solvice-vrp-solver/resources/vrp/vrp";
 import { ErrorHandlingService } from './error-handling-service';
+import { telemetryService } from './telemetry-service';
 
 export interface VrpModificationRequest {
   currentData: Vrp.VrpSyncSolveParams;
@@ -52,14 +53,103 @@ const CsvToVrpResponseSchema = z.object({
   rowsProcessed: z.number()
 });
 
+interface ModelConfig {
+  model: string;
+  maxTokens: number;
+  temperature: number;
+}
+
+interface ModelSelectionContext {
+  requestType: 'chat' | 'vrp_modify' | 'suggestions' | 'csv_convert';
+  tokenEstimate?: number;
+  requiresReasoning?: boolean;
+}
+
 export class OpenAIService {
   private static readonly API_BASE_URL = '/api/openai/chat';
+
+  // Model pricing per million tokens (input/output)
+  private static readonly MODEL_PRICING = {
+    'gpt-4o': { input: 2.50, output: 10.00 },
+    'gpt-4o-mini': { input: 0.15, output: 0.60 },
+  };
 
   constructor() {
     // No client initialization needed - using server-side API
   }
 
+  /**
+   * Select optimal model based on request characteristics
+   */
+  private selectOptimalModel(context: ModelSelectionContext): ModelConfig {
+    const { requestType, tokenEstimate = 0, requiresReasoning = false } = context;
+
+    // Simple suggestions or short chats: Use mini
+    if (requestType === 'suggestions' || (requestType === 'chat' && tokenEstimate < 500)) {
+      return {
+        model: 'gpt-4o-mini',
+        maxTokens: 1000,
+        temperature: 0.7,
+      };
+    }
+
+    // VRP modifications with complex reasoning: Use full model
+    if (requestType === 'vrp_modify' && requiresReasoning) {
+      return {
+        model: 'gpt-4o',
+        maxTokens: 2000,
+        temperature: 0.3,
+      };
+    }
+
+    // CSV conversion: Use mini (Code Interpreter handles complexity)
+    if (requestType === 'csv_convert') {
+      return {
+        model: 'gpt-4o-mini',
+        maxTokens: 4000,
+        temperature: 0.1,
+      };
+    }
+
+    // Default: Use standard model for balanced performance
+    return {
+      model: 'gpt-4o',
+      maxTokens: 1500,
+      temperature: 0.5,
+    };
+  }
+
+  /**
+   * Calculate estimated cost for API usage
+   */
+  private calculateCost(usage: { prompt_tokens: number; completion_tokens: number }, model: string): number {
+    const pricing = OpenAIService.MODEL_PRICING[model as keyof typeof OpenAIService.MODEL_PRICING];
+    if (!pricing) return 0;
+
+    return (
+      (usage.prompt_tokens * pricing.input / 1_000_000) +
+      (usage.completion_tokens * pricing.output / 1_000_000)
+    );
+  }
+
+  /**
+   * Detect if VRP modification requires complex reasoning
+   */
+  private requiresComplexReasoning(request: VrpModificationRequest): boolean {
+    const complexKeywords = [
+      'optimize', 'rebalance', 'redistribute', 'analyze',
+      'compare', 'multiple', 'all', 'every', 'best',
+    ];
+
+    return complexKeywords.some(keyword =>
+      request.userRequest.toLowerCase().includes(keyword)
+    );
+  }
+
   async sendMessage(message: string, systemPrompt?: string): Promise<string> {
+    const startTime = Date.now();
+    const modelConfig = this.selectOptimalModel({ requestType: 'chat' });
+
     const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
 
     if (systemPrompt) {
@@ -82,9 +172,9 @@ export class OpenAIService {
         },
         body: JSON.stringify({
           messages,
-          model: 'gpt-4o',
-          max_tokens: 1000,
-          temperature: 0.7,
+          model: modelConfig.model,
+          max_tokens: modelConfig.maxTokens,
+          temperature: modelConfig.temperature,
         }),
       });
 
@@ -99,8 +189,35 @@ export class OpenAIService {
         throw new Error("No content in OpenAI response");
       }
 
+      // Track usage
+      if (data.usage) {
+        telemetryService.logUsage({
+          model: modelConfig.model,
+          operation: 'sendMessage',
+          promptTokens: data.usage.prompt_tokens || 0,
+          completionTokens: data.usage.completion_tokens || 0,
+          totalTokens: data.usage.total_tokens || 0,
+          estimatedCost: this.calculateCost(data.usage, modelConfig.model),
+          latencyMs: Date.now() - startTime,
+          success: true,
+        });
+      }
+
       return data.content;
     } catch (error: unknown) {
+      // Track failed request
+      telemetryService.logUsage({
+        model: modelConfig.model,
+        operation: 'sendMessage',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        estimatedCost: 0,
+        latencyMs: Date.now() - startTime,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
       if (error instanceof Error) {
         throw new Error(`OpenAI API error: ${error.message}`);
       }
@@ -109,6 +226,9 @@ export class OpenAIService {
   }
 
   async sendStructuredMessage(message: string, systemPrompt?: string): Promise<VrpModificationResponse> {
+    const startTime = Date.now();
+    const modelConfig = this.selectOptimalModel({ requestType: 'vrp_modify', requiresReasoning: true });
+
     const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
 
     if (systemPrompt) {
@@ -125,7 +245,7 @@ export class OpenAIService {
 
     try {
       console.log('🤖 Calling OpenAI API with structured output...');
-      console.log('Model: gpt-4o-2024-08-06');
+      console.log('Model:', modelConfig.model);
       console.log('Messages length:', messages.length);
 
       const response = await fetch(OpenAIService.API_BASE_URL, {
@@ -135,9 +255,9 @@ export class OpenAIService {
         },
         body: JSON.stringify({
           messages,
-          model: 'gpt-4o',
-          max_tokens: 2000,
-          temperature: 0.3,
+          model: modelConfig.model,
+          max_tokens: modelConfig.maxTokens,
+          temperature: modelConfig.temperature,
           response_format: { type: "json_object" }
         }),
       });
@@ -152,6 +272,20 @@ export class OpenAIService {
       console.log('✅ OpenAI response received');
       console.log('Usage:', data.usage);
 
+      // Track usage
+      if (data.usage) {
+        telemetryService.logUsage({
+          model: modelConfig.model,
+          operation: 'sendStructuredMessage',
+          promptTokens: data.usage.prompt_tokens || 0,
+          completionTokens: data.usage.completion_tokens || 0,
+          totalTokens: data.usage.total_tokens || 0,
+          estimatedCost: this.calculateCost(data.usage, modelConfig.model),
+          latencyMs: Date.now() - startTime,
+          success: true,
+        });
+      }
+
       const content = data.content;
       if (!content) {
         throw new Error("No content in OpenAI response");
@@ -164,12 +298,24 @@ export class OpenAIService {
 
       return parsed;
     } catch (error: unknown) {
+      // Track failed request
+      telemetryService.logUsage({
+        model: modelConfig.model,
+        operation: 'sendStructuredMessage',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        estimatedCost: 0,
+        latencyMs: Date.now() - startTime,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
       console.error('❌ Error in sendStructuredMessage:', error);
       console.error('Error type:', typeof error);
       console.error('Error constructor:', error && typeof error === 'object' && 'constructor' in error ? error.constructor?.name : 'Unknown');
       console.error('Error message:', error instanceof Error ? error.message : 'Unknown');
 
-      // Re-throw with more context
       throw new Error(`Structured output failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -215,7 +361,7 @@ export class OpenAIService {
   ): Promise<VrpModificationResponse> {
     try {
       return await ErrorHandlingService.withRetry(async () => {
-        const systemPrompt = this.buildStructuredVrpSystemPrompt();
+        const systemPrompt = this.buildOptimizedVrpSystemPrompt();
         const userMessage = this.buildVrpUserMessage(request);
 
         const result = await this.sendStructuredMessage(userMessage, systemPrompt);
@@ -252,43 +398,27 @@ export class OpenAIService {
   }
 
   /**
-   * Build system prompt with VRP schema and instructions for structured output
+   * Build optimized system prompt with VRP schema (reduced token count)
    */
-  private buildStructuredVrpSystemPrompt(): string {
-    return `You are a VRP (Vehicle Routing Problem) optimization assistant. Your job is to modify VRP JSON data based on user requests.
+  private buildOptimizedVrpSystemPrompt(): string {
+    return `You are a VRP optimization assistant. Modify VRP JSON based on user requests.
 
-${VrpSchemaService.getSchemaForAI()}
+${VrpSchemaService.getCompactSchemaForAI()}
 
-## Instructions:
-1. Understand the user's request for VRP modifications
-2. Apply changes to the provided JSON data
-3. Ensure all modifications preserve required structure
-4. Return ONLY a valid JSON object in the exact format specified below
-
-## Required JSON Response Format:
+## Response Format (JSON only):
 {
-  "modifiedData": { /* complete modified VRP data */ },
-  "explanation": "Brief explanation of what was changed",
-  "changes": [
-    {
-      "type": "add|modify|remove",
-      "target": "job|resource|option",
-      "description": "Description of this specific change"
-    }
-  ]
+  "modifiedData": {/* complete VRP */},
+  "explanation": "What changed",
+  "changes": [{"type": "add|modify|remove", "target": "job|resource|option", "description": "..."}]
 }
 
 ## Rules:
-- RESPOND ONLY WITH VALID JSON - no additional text
-- Always preserve the core structure (jobs array, resources array)
-- Keep all existing data unless specifically asked to remove it
-- Use proper ISO datetime formats (YYYY-MM-DDTHH:mm:ssZ)
-- Validate job and resource names are unique
-- Be conservative: ask for clarification if the request is ambiguous
-- Focus on the specific changes requested, don't optimize the entire solution
-- The modifiedData field must contain the complete VRP data structure
-- Provide clear, concise explanations of what was changed
-- List specific changes in the changes array`;
+- JSON only, no extra text
+- Preserve jobs[], resources[] structure
+- Keep existing data unless removal requested
+- ISO datetimes (YYYY-MM-DDTHH:mm:ssZ)
+- Unique names
+- Focus on requested changes only`;
   }
 
 
@@ -322,34 +452,65 @@ User request: ${request.userRequest}`;
   async generateSuggestions(
     vrpData: Vrp.VrpSyncSolveParams,
   ): Promise<string[]> {
-    const systemPrompt = `You are a VRP optimization expert. Analyze the provided VRP data and suggest 3-5 practical improvements or modifications.
+    const startTime = Date.now();
+    const modelConfig = this.selectOptimalModel({ requestType: 'suggestions' });
 
-${VrpSchemaService.getJobSchema()}
-${VrpSchemaService.getResourceSchema()}
+    const systemPrompt = `VRP expert. Analyze data, suggest 3-5 improvements.
 
-Focus on:
-- Operational efficiency improvements
-- Common optimization opportunities
-- Practical business scenarios
-- Time window optimizations
-- Resource utilization improvements
+${VrpSchemaService.getCompactSchemaForAI()}
 
-Return suggestions as a JSON array of strings, each suggestion being a clear, actionable modification.`;
+Focus: efficiency, time windows, capacity, practical changes.
+Return: JSON array of strings.`;
 
-    const userMessage = `Analyze this VRP data and suggest improvements:
-\`\`\`json
-${JSON.stringify(vrpData, null, 2)}
-\`\`\`
-
-Return exactly 3-5 suggestions as a JSON array of strings.`;
+    const userMessage = `Suggest improvements:\n${JSON.stringify(vrpData, null, 2)}\n\nReturn 3-5 suggestions as JSON array.`;
 
     try {
-      const response = await this.sendMessage(userMessage, systemPrompt);
+      const response = await fetch(OpenAIService.API_BASE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage }
+          ],
+          model: modelConfig.model,
+          max_tokens: modelConfig.maxTokens,
+          temperature: modelConfig.temperature,
+        }),
+      });
 
-      const suggestions = JSON.parse(response);
+      const data = await response.json();
+
+      // Track usage
+      if (data.usage) {
+        telemetryService.logUsage({
+          model: modelConfig.model,
+          operation: 'generateSuggestions',
+          promptTokens: data.usage.prompt_tokens || 0,
+          completionTokens: data.usage.completion_tokens || 0,
+          totalTokens: data.usage.total_tokens || 0,
+          estimatedCost: this.calculateCost(data.usage, modelConfig.model),
+          latencyMs: Date.now() - startTime,
+          success: true,
+        });
+      }
+
+      const suggestions = JSON.parse(data.content);
       return Array.isArray(suggestions) ? suggestions : [];
-    } catch {
-      // Fallback suggestions based on data analysis
+    } catch (error) {
+      // Track failed request
+      telemetryService.logUsage({
+        model: modelConfig.model,
+        operation: 'generateSuggestions',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        estimatedCost: 0,
+        latencyMs: Date.now() - startTime,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
       return this.generateFallbackSuggestions(vrpData);
     }
   }
@@ -565,63 +726,24 @@ ${VrpSchemaService.getSchemaForAI()}
    * Build instructions for Code Interpreter CSV conversion
    */
   static buildCodeInterpreterInstructions(): string {
-    return `You are a VRP (Vehicle Routing Problem) data converter using Code Interpreter. Your task is to:
+    return `VRP data converter using Code Interpreter.
 
-1. Load and analyze uploaded CSV file(s) using pandas or similar tools
-2. For multiple files: identify relationships and merge appropriately
-3. Process the data programmatically to convert it to VRP JSON format
-4. Handle data transformation including:
-   - Converting durations from minutes to seconds
-   - Mapping coordinates properly
-   - Creating valid VRP job structures
-   - Generating appropriate vehicle resources
+1. Load CSV(s) with pandas
+2. Multiple files: identify relationships, merge
+3. Transform: durations (min→sec), map coordinates, create jobs/resources
+4. Return JSON
 
-Use the following VRP schema structure:
-${VrpSchemaService.getSchemaForAI()}
+VRP schema:
+${VrpSchemaService.getCompactSchemaForAI()}
 
-## Processing Steps:
+## Steps:
+Single: Load→map columns→create jobs→generate vehicles→validate
+Multiple: Load all→identify types/relationships→merge→convert→validate
 
-### For Single File:
-1. Load the CSV and examine its structure
-2. Identify column mappings (lat/latitude → location.latitude, etc.)
-3. Process each row to create VRP jobs with proper data types
-4. Convert durations from minutes to seconds (multiply by 60)
-5. Generate vehicle resources based on job count and constraints
-6. Create proper time windows and defaults where needed
-7. Validate the final structure
+## Output:
+{"vrpData": {...}, "explanation": "...", "conversionNotes": [...], "rowsProcessed": N}
 
-### For Multiple Files:
-1. Load all CSV files and examine their structures
-2. Identify file types based on content and naming:
-   - Location/depot files (lat/lon coordinates, addresses)
-   - Job/customer files (orders, deliveries, service requirements)
-   - Vehicle/fleet files (capacity, availability, constraints)
-   - Constraint files (time windows, rules)
-3. Identify relationships between files:
-   - Common ID columns (customer_id, location_id, vehicle_id)
-   - Geographic coordinates that need to be matched
-   - Time windows that need to be aligned
-4. Process files in logical order (locations → jobs → vehicles)
-5. Merge data based on identified relationships
-6. Handle missing relationships gracefully with reasonable defaults
-7. Convert and validate as above
-
-## File Relationship Detection:
-- Look for common column names across files
-- Match location data by coordinates or address
-- Link jobs to locations by ID or proximity
-- Assign vehicles based on capacity and location constraints
-
-## Output Format:
-Return a JSON object with this exact structure:
-{
-  "vrpData": { /* complete VRP request object */ },
-  "explanation": "Brief explanation of the conversion process",
-  "conversionNotes": ["Note about assumption 1", "File relationship details", "Data merge notes"],
-  "rowsProcessed": number
-}
-
-Show your work step by step using Code Interpreter, then provide the final JSON result.`;
+Show work, provide final JSON.`;
   }
 
   /**
