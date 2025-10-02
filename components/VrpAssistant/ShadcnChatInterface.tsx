@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from 'react'
 import { useVrpAssistant } from './VrpAssistantContext'
 import { ProcessingIndicator } from './ProcessingIndicator'
+import { ChatModeSelector } from './ChatModeSelector'
 import { Button } from '@/components/ui/button'
 import { MessageList } from '@/components/ui/message-list'
 import { Paperclip } from 'lucide-react'
@@ -14,6 +15,8 @@ export function ShadcnChatInterface() {
     handleInputChange,
     handleSubmit,
     isProcessing,
+    chatMode,
+    setChatMode,
     processUserMessage,
     processCsvUpload,
     processMultipleCsvUpload
@@ -30,13 +33,45 @@ export function ShadcnChatInterface() {
     }
   }, [messages, isProcessing])
 
-  const suggestions = [
-    "Add a new vehicle with capacity 100",
-    "Change the depot location to London", 
-    "Add time windows to all locations",
-    "Increase vehicle capacity by 20%",
-    "Add a priority constraint to urgent deliveries"
-  ]
+  // Mode-specific suggestions
+  const getSuggestionsForMode = () => {
+    switch (chatMode) {
+      case 'modify':
+        return [
+          "Add a new vehicle with capacity 100",
+          "Change the depot location to London",
+          "Add time windows to all locations",
+          "Increase vehicle capacity by 20%",
+        ]
+      case 'analyze':
+        return [
+          "Analyze the total distance traveled",
+          "Show me vehicle utilization rates",
+          "What are the bottlenecks in this solution?",
+          "Compare this solution to optimal benchmarks",
+        ]
+      case 'convert':
+        return [
+          "Upload CSV with delivery locations",
+          "Convert multi-file customer data",
+          "Import time windows from spreadsheet",
+        ]
+    }
+  }
+
+  // Mode-specific placeholder
+  const getPlaceholderForMode = () => {
+    switch (chatMode) {
+      case 'modify':
+        return "Ask me to modify your VRP data..."
+      case 'analyze':
+        return "Ask me to analyze your VRP solution..."
+      case 'convert':
+        return "Upload CSV files or ask about data conversion..."
+    }
+  }
+
+  const suggestions = getSuggestionsForMode()
 
   // Adapt our handleSubmit to match the expected signature
   const adaptedHandleSubmit = (event?: { preventDefault?: () => void }) => {
@@ -215,18 +250,29 @@ export function ShadcnChatInterface() {
   }
 
   return (
-    <div 
-      className="h-full flex flex-col" 
+    <div
+      className="h-full flex flex-col"
       role="region"
       aria-label="VRP AI Assistant Chat Interface"
     >
+      {/* Mode selector at top */}
+      <div className="border-b p-3">
+        <ChatModeSelector
+          value={chatMode}
+          onChange={setChatMode}
+          disabled={isProcessing}
+        />
+      </div>
+
       {/* Messages area */}
       <div className="flex-1 min-h-0 flex flex-col">
         {messages.length === 0 ? (
           /* Initial suggestions */
           <div className="p-4 space-y-4">
             <p className="text-sm text-muted-foreground text-center">
-              Try these suggestions to get started:
+              {chatMode === 'modify' && "Try these suggestions to get started:"}
+              {chatMode === 'analyze' && "Ask me to analyze your VRP solution:"}
+              {chatMode === 'convert' && "Upload CSV files or try these examples:"}
             </p>
             <div className="grid gap-2">
               {suggestions.map((suggestion) => (
@@ -279,7 +325,7 @@ export function ShadcnChatInterface() {
                 value={input}
                 onChange={handleInputChange}
                 data-testid="chat-input"
-                placeholder="Ask me to modify your VRP data..."
+                placeholder={getPlaceholderForMode()}
                 disabled={isProcessing}
                 className="w-full min-h-[44px] max-h-32 p-3 pr-12 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                 onKeyDown={(e) => {
@@ -289,18 +335,21 @@ export function ShadcnChatInterface() {
                   }
                 }}
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleFileUpload}
-                disabled={isProcessing}
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 hover:bg-gray-100"
-                title="Upload CSV file"
-                aria-label="Upload CSV file"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
+              {/* Only show file upload in convert mode */}
+              {chatMode === 'convert' && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFileUpload}
+                  disabled={isProcessing}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 hover:bg-gray-100"
+                  title="Upload CSV file"
+                  aria-label="Upload CSV file"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             <Button
               type="submit"
@@ -314,15 +363,17 @@ export function ShadcnChatInterface() {
           </div>
         </form>
 
-        {/* Hidden file input - supports multiple files */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".csv"
-          multiple
-          onChange={handleFileChange}
-          className="hidden"
-        />
+        {/* Hidden file input - only in convert mode */}
+        {chatMode === 'convert' && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            multiple
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        )}
       </div>
     </div>
   )

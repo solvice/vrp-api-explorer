@@ -1,11 +1,13 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import { Message, ExecutionMetadata } from '@/components/ui/chat-message'
 import { OpenAIService, type CsvToVrpResponse } from '@/lib/openai-service'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { ErrorHandlingService, type VrpError } from '@/lib/error-handling-service'
 import { useVrpMessages } from '@/lib/hooks/useVrpMessages'
+
+export type ChatMode = 'modify' | 'analyze' | 'convert'
 
 interface VrpAssistantContextType {
   isProcessing: boolean
@@ -13,6 +15,7 @@ interface VrpAssistantContextType {
   vrpData: Vrp.VrpSyncSolveParams | null
   input: string
   isOpen: boolean
+  chatMode: ChatMode
   setProcessing: (processing: boolean) => void
   addMessage: (role: 'user' | 'assistant' | 'system', content: string, executionMetadata?: ExecutionMetadata) => void
   clearMessages: () => void
@@ -27,6 +30,7 @@ interface VrpAssistantContextType {
   toggleAssistant: () => void
   openAssistant: () => void
   closeAssistant: () => void
+  setChatMode: (mode: ChatMode) => void
 }
 
 const VrpAssistantContext = createContext<VrpAssistantContextType | undefined>(undefined)
@@ -44,6 +48,7 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
   const [vrpData, setVrpDataState] = useState<Vrp.VrpSyncSolveParams | null>(null)
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(false)
+  const [chatMode, setChatModeState] = useState<ChatMode>('modify')
   const [openAIService] = useState<OpenAIService | null>(null)
   const [onVrpDataUpdate, setOnVrpDataUpdateState] = useState<((data: Vrp.VrpSyncSolveParams) => void) | undefined>()
 
@@ -76,10 +81,10 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
   const processUserMessage = async (message: string) => {
     try {
       setProcessing(true)
-      
+
       // Add user message
       addMessage('user', message)
-      
+
       if (!vrpData) {
         addMessage('assistant', 'I need VRP data to help you. Please make sure you have a VRP request loaded in the editor.')
         return
@@ -96,65 +101,34 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
         }
       }
 
-      // Process with OpenAI
-      const modificationRequest = {
-        currentData: vrpData,
-        userRequest: message
+      // Route to different handlers based on mode
+      switch (chatMode) {
+        case 'modify':
+          await handleModifyMode(aiService, message, vrpData)
+          break
+        case 'analyze':
+          await handleAnalyzeMode(aiService, message, vrpData)
+          break
+        case 'convert':
+          addMessage('assistant', 'Please upload CSV files using the paperclip button for conversion.')
+          break
       }
-      const modifiedData = await aiService.modifyVrpData(modificationRequest)
-      
-      if (modifiedData?.modifiedData) {
-        // Success - we have modified data
-        const explanation = modifiedData.explanation || 'I\'ve processed your request and modified the VRP data accordingly.'
-        addMessage('assistant', explanation)
-        
-        // Update the VRP data in the editor through the callback
-        if (onVrpDataUpdate) {
-          try {
-            onVrpDataUpdate(modifiedData.modifiedData)
-            setVrpData(modifiedData.modifiedData)
-            
-            // Add a success message with change summary
-            if (modifiedData.changes && modifiedData.changes.length > 0) {
-              const changesSummary = modifiedData.changes
-                .map(change => `${change.type} ${change.target}`)
-                .join(', ')
-              
-              setTimeout(() => {
-                addMessage('system', `✅ Changes applied: ${changesSummary}`)
-              }, 500)
-            }
-          } catch (error) {
-            console.error('Failed to apply VRP changes:', error)
-            addMessage('assistant', 'The changes were processed but failed to apply to the editor. Please try again.')
-          }
-        } else {
-          addMessage('assistant', 'Changes processed successfully, but the editor connection is not available.')
-        }
-        
-        // Log changes for debugging
-        if (modifiedData.changes && modifiedData.changes.length > 0) {
-          console.log('VRP Changes applied:', modifiedData.changes)
-        }
-      } else {
-        addMessage('assistant', 'I wasn\'t able to modify the VRP data based on your request. Could you please try rephrasing or being more specific?')
-      }
-      
+
     } catch (error) {
       console.error('Error processing user message:', error)
-      
+
       // Handle VrpError with detailed user feedback
       if (error && typeof error === 'object' && 'type' in error) {
         const vrpError = error as VrpError
         const userMessage = ErrorHandlingService.formatUserError(vrpError)
         addMessage('assistant', userMessage)
-        
+
         // Add specific suggestions as separate messages for better UX
         if (vrpError.suggestions.length > 0) {
-          const suggestionMessage = vrpError.suggestions.length === 1 
+          const suggestionMessage = vrpError.suggestions.length === 1
             ? `💡 **Suggestion:** ${vrpError.suggestions[0]}`
             : `💡 **Here are some suggestions:**\n${vrpError.suggestions.map((s) => `• ${s}`).join('\n')}`
-          
+
           // Add suggestions after a brief delay for better visual flow
           setTimeout(() => {
             addMessage('system', suggestionMessage)
@@ -166,6 +140,68 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
       }
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const handleModifyMode = async (aiService: OpenAIService, message: string, vrpData: Vrp.VrpSyncSolveParams) => {
+    // Process with OpenAI
+    const modificationRequest = {
+      currentData: vrpData,
+      userRequest: message
+    }
+    const modifiedData = await aiService.modifyVrpData(modificationRequest)
+
+    if (modifiedData?.modifiedData) {
+      // Success - we have modified data
+      const explanation = modifiedData.explanation || 'I\'ve processed your request and modified the VRP data accordingly.'
+      addMessage('assistant', explanation)
+
+      // Update the VRP data in the editor through the callback
+      if (onVrpDataUpdate) {
+        try {
+          onVrpDataUpdate(modifiedData.modifiedData)
+          setVrpData(modifiedData.modifiedData)
+
+          // Add a success message with change summary
+          if (modifiedData.changes && modifiedData.changes.length > 0) {
+            const changesSummary = modifiedData.changes
+              .map(change => `${change.type} ${change.target}`)
+              .join(', ')
+
+            setTimeout(() => {
+              addMessage('system', `✅ Changes applied: ${changesSummary}`)
+            }, 500)
+          }
+        } catch (error) {
+          console.error('Failed to apply VRP changes:', error)
+          addMessage('assistant', 'The changes were processed but failed to apply to the editor. Please try again.')
+        }
+      } else {
+        addMessage('assistant', 'Changes processed successfully, but the editor connection is not available.')
+      }
+
+      // Log changes for debugging
+      if (modifiedData.changes && modifiedData.changes.length > 0) {
+        console.log('VRP Changes applied:', modifiedData.changes)
+      }
+    } else {
+      addMessage('assistant', 'I wasn\'t able to modify the VRP data based on your request. Could you please try rephrasing or being more specific?')
+    }
+  }
+
+  const handleAnalyzeMode = async (aiService: OpenAIService, message: string, vrpData: Vrp.VrpSyncSolveParams) => {
+    // For now, use the same OpenAI service but with different context
+    // In the future, this could call a dedicated analysis endpoint
+    const modificationRequest = {
+      currentData: vrpData,
+      userRequest: `Analyze the VRP data and answer this question: ${message}`
+    }
+    const result = await aiService.modifyVrpData(modificationRequest)
+
+    if (result?.explanation) {
+      addMessage('assistant', result.explanation)
+    } else {
+      addMessage('assistant', 'I wasn\'t able to analyze the VRP data based on your request. Could you please try rephrasing or being more specific?')
     }
   }
 
@@ -326,12 +362,34 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
     setIsOpen(false)
   }
 
+  // Chat mode functions
+  const setChatMode = useCallback((mode: ChatMode) => {
+    setChatModeState(mode)
+  }, [])
+
+  // Keyboard shortcut for mode switching (Shift+Tab)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.shiftKey && event.key === 'Tab' && isOpen) {
+        event.preventDefault()
+        const modes: ChatMode[] = ['modify', 'analyze', 'convert']
+        const currentIndex = modes.indexOf(chatMode)
+        const nextIndex = (currentIndex + 1) % modes.length
+        setChatMode(modes[nextIndex])
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [chatMode, isOpen, setChatMode])
+
   const value: VrpAssistantContextType = {
     isProcessing,
     messages,
     vrpData,
     input,
     isOpen,
+    chatMode,
     setProcessing,
     addMessage,
     clearMessages,
@@ -345,7 +403,8 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
     setOnVrpDataUpdate,
     toggleAssistant,
     openAssistant,
-    closeAssistant
+    closeAssistant,
+    setChatMode
   }
 
   return (

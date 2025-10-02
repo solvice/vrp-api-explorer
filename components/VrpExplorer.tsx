@@ -15,7 +15,11 @@ import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { JobExplanationResponse } from 'solvice-vrp-solver/resources/vrp/jobs'
 import { toast, Toaster } from 'sonner'
 
-export function VrpExplorer() {
+interface VrpExplorerProps {
+  enableAiAssistant?: boolean
+}
+
+export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
   // State management - grouped by logical concern
 
   // VRP Request state (input data and validation)
@@ -371,7 +375,7 @@ export function VrpExplorer() {
         }
       />
 
-      <VrpAssistantContainer />
+      {enableAiAssistant && <VrpAssistantContainer />}
 
       <Toaster
         position="bottom-right"

@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Pencil, BarChart3, FileJson } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { VrpAssistantPane } from './VrpAssistantPane'
 import { useVrpAssistant } from './VrpAssistantContext'
 
 export function VrpAssistantContainer() {
-  const { messages, isOpen, toggleAssistant, closeAssistant } = useVrpAssistant()
+  const { messages, isOpen, chatMode, toggleAssistant, closeAssistant } = useVrpAssistant()
   const [isMobile, setIsMobile] = useState(false)
   const [isClient, setIsClient] = useState(false)
 
@@ -55,6 +56,15 @@ export function VrpAssistantContainer() {
   // Check if there are any messages (for notification badge) - only after hydration
   const hasMessages = isClient && messages.length > 0
 
+  // Mode icon mapping
+  const modeIcons = {
+    modify: Pencil,
+    analyze: BarChart3,
+    convert: FileJson,
+  }
+
+  const ModeIcon = modeIcons[chatMode]
+
   return (
     <Sheet open={isOpen} onOpenChange={toggleAssistant}>
       {/* Floating Action Button - only show when closed */}
@@ -92,13 +102,19 @@ export function VrpAssistantContainer() {
         )}
 
         {/* Panel Header */}
-        <SheetHeader className="border-b bg-muted/30">
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            <SheetTitle className="text-sm">VRP AI Assistant</SheetTitle>
+        <SheetHeader className="border-b bg-muted/30 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <SheetTitle className="text-sm">VRP AI Assistant</SheetTitle>
+            </div>
+            <Badge variant="secondary" className="gap-1.5">
+              <ModeIcon className="h-3 w-3" />
+              <span className="capitalize">{chatMode}</span>
+            </Badge>
           </div>
           <SheetDescription className="text-xs">
-            Powered by OpenAI
+            Powered by OpenAI • Press Shift+Tab to change mode
           </SheetDescription>
         </SheetHeader>
 
