@@ -130,13 +130,13 @@ export const rateLimiters = {
 
   // VRP API: 10 requests per 15 minutes (tightened for demo)
   vrp: rateLimit({
-    maxRequests: 10,
+    maxRequests: 60,
     windowMs: 15 * 60 * 1000, // 15 minutes
   }),
 
   // Daily limit across all endpoints: 50 requests per 24 hours
   daily: rateLimit({
-    maxRequests: 50,
+    maxRequests: 250,
     windowMs: 24 * 60 * 60 * 1000, // 24 hours
   }),
 

@@ -255,15 +255,6 @@ export function ShadcnChatInterface() {
       role="region"
       aria-label="VRP AI Assistant Chat Interface"
     >
-      {/* Mode selector at top */}
-      <div className="border-b p-3">
-        <ChatModeSelector
-          value={chatMode}
-          onChange={setChatMode}
-          disabled={isProcessing}
-        />
-      </div>
-
       {/* Messages area */}
       <div className="flex-1 min-h-0 flex flex-col">
         {messages.length === 0 ? (
@@ -319,47 +310,57 @@ export function ShadcnChatInterface() {
       {/* Input area */}
       <div className="border-t p-4">
         <form onSubmit={adaptedHandleSubmit}>
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <textarea
-                value={input}
-                onChange={handleInputChange}
-                data-testid="chat-input"
-                placeholder={getPlaceholderForMode()}
-                disabled={isProcessing}
-                className="w-full min-h-[44px] max-h-32 p-3 pr-12 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    adaptedHandleSubmit()
-                  }
-                }}
-              />
-              {/* Only show file upload in convert mode */}
-              {chatMode === 'convert' && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleFileUpload}
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <textarea
+                  value={input}
+                  onChange={handleInputChange}
+                  data-testid="chat-input"
+                  placeholder={getPlaceholderForMode()}
                   disabled={isProcessing}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 hover:bg-gray-100"
-                  title="Upload CSV file"
-                  aria-label="Upload CSV file"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-              )}
+                  className="w-full min-h-[44px] max-h-32 p-3 pr-12 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      adaptedHandleSubmit()
+                    }
+                  }}
+                />
+                {/* Only show file upload in convert mode */}
+                {chatMode === 'convert' && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleFileUpload}
+                    disabled={isProcessing}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 hover:bg-gray-100"
+                    title="Upload CSV file"
+                    aria-label="Upload CSV file"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <Button
+                type="submit"
+                data-testid="send-button"
+                disabled={!input.trim() || isProcessing}
+                size="sm"
+                className="px-4"
+              >
+                Send
+              </Button>
             </div>
-            <Button
-              type="submit"
-              data-testid="send-button"
-              disabled={!input.trim() || isProcessing}
-              size="sm"
-              className="px-4"
-            >
-              Send
-            </Button>
+            {/* Mode selector pills below textarea */}
+            <div className="flex items-center justify-between">
+              <ChatModeSelector
+                value={chatMode}
+                onChange={setChatMode}
+                disabled={isProcessing}
+              />
+            </div>
           </div>
         </form>
 
