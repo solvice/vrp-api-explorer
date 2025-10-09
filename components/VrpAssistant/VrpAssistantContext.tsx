@@ -13,6 +13,7 @@ interface VrpAssistantContextType {
   isProcessing: boolean
   messages: Message[]
   vrpData: Vrp.VrpSyncSolveParams | null
+  solution: Vrp.OnRouteResponse | null
   input: string
   isOpen: boolean
   chatMode: ChatMode
@@ -23,6 +24,7 @@ interface VrpAssistantContextType {
   processCsvUpload: (csvContent: string, filename: string) => Promise<void>
   processMultipleCsvUpload: (files: Array<{ content: string; name: string }>) => Promise<void>
   setVrpData: (data: Vrp.VrpSyncSolveParams | null) => void
+  setSolution: (solution: Vrp.OnRouteResponse | null) => void
   handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
   handleSubmit: (e?: React.FormEvent) => void
   onVrpDataUpdate?: (data: Vrp.VrpSyncSolveParams) => void
@@ -46,11 +48,16 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
   // State management
   const [isProcessing, setIsProcessingState] = useState(false)
   const [vrpData, setVrpDataState] = useState<Vrp.VrpSyncSolveParams | null>(null)
+  const [solution, setSolutionState] = useState<Vrp.OnRouteResponse | null>(null)
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [chatMode, setChatModeState] = useState<ChatMode>('modify')
   const [openAIService] = useState<OpenAIService | null>(null)
   const [onVrpDataUpdate, setOnVrpDataUpdateState] = useState<((data: Vrp.VrpSyncSolveParams) => void) | undefined>()
+
+  // Agent state management
+  const [agentThreadId, setAgentThreadId] = useState<string | undefined>()
+  const [agentAssistantId, setAgentAssistantId] = useState<string | undefined>()
 
   const setProcessing = (processing: boolean) => {
     setIsProcessingState(processing)
@@ -58,6 +65,10 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
 
   const setVrpData = (data: Vrp.VrpSyncSolveParams | null) => {
     setVrpDataState(data)
+  }
+
+  const setSolution = (sol: Vrp.OnRouteResponse | null) => {
+    setSolutionState(sol)
   }
 
   const setOnVrpDataUpdate = useCallback((callback: (data: Vrp.VrpSyncSolveParams) => void) => {
@@ -144,27 +155,34 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
   }
 
   const handleModifyMode = async (aiService: OpenAIService, message: string, vrpData: Vrp.VrpSyncSolveParams) => {
-    // Process with OpenAI
-    const modificationRequest = {
-      currentData: vrpData,
-      userRequest: message
+    // Use VRP Agent with Code Interpreter + function tools
+    const agentRequest = {
+      message,
+      threadId: agentThreadId,
+      assistantId: agentAssistantId,
+      vrpData,
+      solution: solution || undefined
     }
-    const modifiedData = await aiService.modifyVrpData(modificationRequest)
 
-    if (modifiedData?.modifiedData) {
-      // Success - we have modified data
-      const explanation = modifiedData.explanation || 'I\'ve processed your request and modified the VRP data accordingly.'
-      addMessage('assistant', explanation)
+    const agentResponse = await aiService.useVrpAgent(agentRequest)
 
-      // Update the VRP data in the editor through the callback
+    // Update agent state for conversation continuity
+    setAgentThreadId(agentResponse.threadId)
+    setAgentAssistantId(agentResponse.assistantId)
+
+    // Add assistant's response
+    addMessage('assistant', agentResponse.response)
+
+    // Handle VRP data modifications if any
+    if (agentResponse.modifiedData) {
       if (onVrpDataUpdate) {
         try {
-          onVrpDataUpdate(modifiedData.modifiedData)
-          setVrpData(modifiedData.modifiedData)
+          onVrpDataUpdate(agentResponse.modifiedData)
+          setVrpData(agentResponse.modifiedData)
 
           // Add a success message with change summary
-          if (modifiedData.changes && modifiedData.changes.length > 0) {
-            const changesSummary = modifiedData.changes
+          if (agentResponse.changes && agentResponse.changes.length > 0) {
+            const changesSummary = agentResponse.changes
               .map(change => `${change.type} ${change.target}`)
               .join(', ')
 
@@ -181,27 +199,42 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
       }
 
       // Log changes for debugging
-      if (modifiedData.changes && modifiedData.changes.length > 0) {
-        console.log('VRP Changes applied:', modifiedData.changes)
+      if (agentResponse.changes && agentResponse.changes.length > 0) {
+        console.log('VRP Agent Changes applied:', agentResponse.changes)
       }
-    } else {
-      addMessage('assistant', 'I wasn\'t able to modify the VRP data based on your request. Could you please try rephrasing or being more specific?')
+    }
+
+    // Handle code outputs (charts, calculations) if any
+    if (agentResponse.codeOutputs && agentResponse.codeOutputs.length > 0) {
+      console.log('📊 Code Interpreter outputs:', agentResponse.codeOutputs)
+      // Future: Display charts/images in the chat
     }
   }
 
   const handleAnalyzeMode = async (aiService: OpenAIService, message: string, vrpData: Vrp.VrpSyncSolveParams) => {
-    // For now, use the same OpenAI service but with different context
-    // In the future, this could call a dedicated analysis endpoint
-    const modificationRequest = {
-      currentData: vrpData,
-      userRequest: `Analyze the VRP data and answer this question: ${message}`
+    // Use VRP Agent - it handles both analysis and modifications
+    // When in analyze mode, the agent will prefer Code Interpreter for calculations
+    const agentRequest = {
+      message,
+      threadId: agentThreadId,
+      assistantId: agentAssistantId,
+      vrpData,
+      solution: solution || undefined
     }
-    const result = await aiService.modifyVrpData(modificationRequest)
 
-    if (result?.explanation) {
-      addMessage('assistant', result.explanation)
-    } else {
-      addMessage('assistant', 'I wasn\'t able to analyze the VRP data based on your request. Could you please try rephrasing or being more specific?')
+    const agentResponse = await aiService.useVrpAgent(agentRequest)
+
+    // Update agent state for conversation continuity
+    setAgentThreadId(agentResponse.threadId)
+    setAgentAssistantId(agentResponse.assistantId)
+
+    // Add assistant's response
+    addMessage('assistant', agentResponse.response)
+
+    // Handle code outputs (charts, calculations) if any
+    if (agentResponse.codeOutputs && agentResponse.codeOutputs.length > 0) {
+      console.log('📊 Code Interpreter outputs:', agentResponse.codeOutputs)
+      // Future: Display charts/images in the chat
     }
   }
 
@@ -387,6 +420,7 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
     isProcessing,
     messages,
     vrpData,
+    solution,
     input,
     isOpen,
     chatMode,
@@ -397,6 +431,7 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
     processCsvUpload,
     processMultipleCsvUpload,
     setVrpData,
+    setSolution,
     handleInputChange,
     handleSubmit,
     onVrpDataUpdate,

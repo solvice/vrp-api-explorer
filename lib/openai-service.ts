@@ -33,6 +33,51 @@ export interface CsvToVrpResponse {
   };
 }
 
+export interface VrpAnalysisRequest {
+  vrpProblem: Vrp.VrpSyncSolveParams;
+  vrpSolution: Vrp.OnRouteResponse;
+  userQuestion: string;
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+}
+
+export interface VrpAnalysisResponse {
+  analysis: string;
+  codeOutputs?: Array<{ type: string; content: string }>;
+  threadId: string;
+  runId: string;
+  usage?: {
+    estimatedCost: number;
+  };
+}
+
+export interface VrpAgentRequest {
+  message: string;
+  threadId?: string;
+  assistantId?: string;
+  vrpData: Vrp.VrpSyncSolveParams;
+  solution?: Vrp.OnRouteResponse;
+}
+
+export interface VrpAgentResponse {
+  response: string;
+  threadId: string;
+  assistantId: string;
+  runId?: string;
+  modifiedData?: Vrp.VrpSyncSolveParams;
+  changes?: Array<{
+    type: "add" | "modify" | "remove";
+    target: "job" | "resource" | "option";
+    description: string;
+  }>;
+  codeOutputs?: Array<{ type: string; content: string }>;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    estimatedCost: number;
+  };
+}
+
 // Zod schemas for structured outputs (currently unused but kept for future validation)
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VrpModificationResponseSchema = z.object({
@@ -780,5 +825,143 @@ Show work, provide final JSON.`;
     );
 
     return suggestions;
+  }
+
+  /**
+   * Analyze VRP solution using Code Interpreter
+   * Provides deep insights, calculations, and what-if analysis
+   */
+  async analyzeVrpSolution(request: VrpAnalysisRequest): Promise<VrpAnalysisResponse> {
+    const startTime = Date.now();
+
+    try {
+      const response = await fetch('/api/openai/analyze-vrp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.success || !data.analysis) {
+        throw new Error("Invalid response format from VRP analysis API");
+      }
+
+      console.log('✅ VRP analysis completed in', Date.now() - startTime, 'ms');
+
+      return {
+        analysis: data.analysis,
+        codeOutputs: data.codeOutputs,
+        threadId: data.threadId,
+        runId: data.runId,
+        usage: data.usage
+      };
+    } catch (error: unknown) {
+      console.error('🚨 VRP analysis error:', error);
+      const vrpError = ErrorHandlingService.classifyError(error);
+      ErrorHandlingService.logError(vrpError, {
+        operation: 'analyzeVrpSolution',
+        questionLength: request.userQuestion.length,
+        hasHistory: !!request.conversationHistory?.length
+      });
+      throw vrpError;
+    }
+  }
+
+  /**
+   * Use VRP Agent with Code Interpreter + function tools
+   * Handles both analytical questions and VRP modifications
+   *
+   * This is the unified agent that can:
+   * 1. Answer analytical questions using Code Interpreter (Python)
+   * 2. Modify VRP data using function tools
+   *
+   * The agent automatically decides which tools to use based on the request.
+   */
+  async useVrpAgent(request: VrpAgentRequest): Promise<VrpAgentResponse> {
+    const startTime = Date.now();
+
+    try {
+      return await ErrorHandlingService.withRetry(async () => {
+        const response = await fetch('/api/openai/vrp-agent', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(request),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || "VRP Agent request failed");
+        }
+
+        // Track usage
+        if (data.usage) {
+          telemetryService.logUsage({
+            model: 'gpt-4o',
+            operation: 'useVrpAgent',
+            promptTokens: data.usage.promptTokens || 0,
+            completionTokens: data.usage.completionTokens || 0,
+            totalTokens: data.usage.totalTokens || 0,
+            estimatedCost: data.usage.estimatedCost || 0,
+            latencyMs: Date.now() - startTime,
+            success: true,
+          });
+        }
+
+        console.log('✅ VRP Agent completed in', Date.now() - startTime, 'ms');
+
+        return {
+          response: data.response,
+          threadId: data.threadId,
+          assistantId: data.assistantId,
+          runId: data.runId,
+          modifiedData: data.modifiedData,
+          changes: data.changes,
+          codeOutputs: data.codeOutputs,
+          usage: data.usage
+        };
+      }, {
+        maxRetries: 1, // Agent calls can be expensive, fewer retries
+        baseDelay: 2000,
+        maxDelay: 15000
+      });
+    } catch (error: unknown) {
+      // Track failed request
+      telemetryService.logUsage({
+        model: 'gpt-4o',
+        operation: 'useVrpAgent',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        estimatedCost: 0,
+        latencyMs: Date.now() - startTime,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      console.error('🚨 VRP Agent error:', error);
+      const vrpError = ErrorHandlingService.classifyError(error);
+      ErrorHandlingService.logError(vrpError, {
+        operation: 'useVrpAgent',
+        messageLength: request.message.length,
+        hasThread: !!request.threadId
+      });
+      throw vrpError;
+    }
   }
 }
