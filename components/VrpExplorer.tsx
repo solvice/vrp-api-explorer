@@ -7,8 +7,6 @@ import { VrpJsonEditor } from './VrpJsonEditor'
 import { VrpMap } from './VrpMap'
 import { VrpGantt, JobReorderEvent } from './VrpGantt'
 import { VrpKpiBar } from './VrpKpiBar'
-import { VrpAssistantContainer } from './VrpAssistant/VrpAssistantContainer'
-import { useVrpAssistant } from './VrpAssistant/VrpAssistantContext'
 import { VrpApiError } from '@/lib/vrp-api'
 import { getSampleVrpData, SampleType } from '@/lib/sample-data'
 import { ValidationResult } from '@/lib/vrp-schema'
@@ -21,9 +19,6 @@ interface VrpExplorerProps {
 }
 
 export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
-  // VRP Assistant context hook
-  const { setVrpData, setSolution, setOnVrpDataUpdate } = useVrpAssistant()
-
   // State management - grouped by logical concern
 
   // VRP Request state (input data and validation)
@@ -60,26 +55,6 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
   // URL parameter handling
   const searchParams = useSearchParams()
   const router = useRouter()
-
-  // Sync VRP data with assistant context
-  useEffect(() => {
-    setVrpData(vrpRequest.data)
-  }, [vrpRequest.data, setVrpData])
-
-  // Sync solution data with assistant context
-  useEffect(() => {
-    setSolution(vrpResponse.data)
-  }, [vrpResponse.data, setSolution])
-
-  // Set up callback for assistant to update VRP data
-  useEffect(() => {
-    setOnVrpDataUpdate((newData: Vrp.VrpSyncSolveParams) => {
-      console.log('🤖 AI Assistant updated VRP data')
-      setVrpRequest(prev => ({ ...prev, data: newData }))
-      // Clear solution when request changes from assistant
-      setVrpResponse(prev => ({ ...prev, data: null }))
-    })
-  }, [setOnVrpDataUpdate])
 
   // Handle API key changes - now just a placeholder since keys are server-side
   const handleApiKeyChange = useCallback(async () => {
@@ -398,8 +373,6 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
           ) : undefined
         }
       />
-
-      {enableAiAssistant && <VrpAssistantContainer />}
 
       <Toaster
         position="bottom-right"

@@ -6,8 +6,7 @@ import { Editor } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { validateVrpRequest, ValidationResult } from '@/lib/vrp-schema'
-import { CheckCircle, XCircle, Loader2, Play, Settings, ExternalLink } from 'lucide-react'
-import { useVrpAssistant } from '@/components/VrpAssistant/VrpAssistantContext'
+import { CheckCircle, XCircle, Loader2, Play, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -185,7 +184,6 @@ function VrpJsonEditorContent({
   onLoadJob,
   onClearJob
 }: VrpJsonEditorProps) {
-  const { setVrpData, setOnVrpDataUpdate } = useVrpAssistant()
   const [validationResult, setValidationResult] = useState<ValidationResult>({ valid: true, errors: [] })
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const [tempApiKey, setTempApiKey] = useState('')
@@ -200,29 +198,6 @@ function VrpJsonEditorContent({
   useEffect(() => {
     injectAIHighlightStyles()
   }, [])
-
-  // Set up VRP data sharing with AI assistant
-  useEffect(() => {
-    if (requestData) {
-      setVrpData(requestData as unknown as Vrp.VrpSyncSolveParams)
-    }
-  }, [requestData, setVrpData])
-
-  // Set up callback for AI-modified VRP data
-  useEffect(() => {
-    setOnVrpDataUpdate((newData: Vrp.VrpSyncSolveParams) => {
-      const newJsonString = JSON.stringify(newData, null, 2)
-      setJsonString(newJsonString)
-
-      // Trigger change event to parent
-      onChange(newData as unknown as Record<string, unknown>)
-
-      // Apply highlighting if editor is available
-      if (editorRef.current) {
-        highlightChangesAndScroll(editorRef.current, jsonString, newJsonString)
-      }
-    })
-  }, [setOnVrpDataUpdate, onChange, jsonString])
 
   // Validate data and notify parent
   const validateData = useCallback((data: Record<string, unknown>) => {
@@ -242,51 +217,6 @@ function VrpJsonEditorContent({
   useEffect(() => {
     validateData(requestData)
   }, [requestData, validateData])
-
-  // Set up VRP Assistant integration
-  useEffect(() => {
-    // Sync current VRP data to assistant
-    if (requestData && typeof requestData === 'object') {
-      setVrpData(requestData as unknown as Vrp.VrpSyncSolveParams)
-    }
-  }, [requestData, setVrpData])
-
-  // Set up callback for AI modifications (separate useEffect to avoid circular dependency)
-  useEffect(() => {
-    const handleVrpDataUpdate = (modifiedData: Vrp.VrpSyncSolveParams) => {
-      console.log('🤖 VrpJsonEditor: AI modified data, updating editor and notifying parent...', {
-        hasJobs: Array.isArray(modifiedData?.jobs),
-        jobCount: modifiedData?.jobs?.length,
-        hasResources: Array.isArray(modifiedData?.resources),
-        resourceCount: modifiedData?.resources?.length
-      })
-      
-      const editor = editorRef.current
-      const oldJsonString = jsonString
-      const newJsonString = JSON.stringify(modifiedData, null, 2)
-      
-      // Update the JSON string in the editor
-      setJsonString(newJsonString)
-      setParseError(null)
-      
-      // Notify parent component of the change
-      console.log('🤖 VrpJsonEditor: Calling onChange to notify VrpExplorer...')
-      onChange(modifiedData as unknown as Record<string, unknown>)
-      
-      // Validate the new data
-      validateData(modifiedData as unknown as Record<string, unknown>)
-      
-      // Add visual feedback and scrolling if editor is available
-      if (editor) {
-        // Give a moment for the new content to be set
-        setTimeout(() => {
-          highlightChangesAndScroll(editor, oldJsonString, newJsonString)
-        }, 100)
-      }
-    }
-
-    setOnVrpDataUpdate(handleVrpDataUpdate)
-  }, [setOnVrpDataUpdate, onChange, validateData, jsonString])
 
   const handleRequestChange = (value: Record<string, unknown>) => {
     onChange(value)
