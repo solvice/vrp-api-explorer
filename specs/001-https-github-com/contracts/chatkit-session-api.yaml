@@ -1,0 +1,521 @@
+openapi: 3.0.3
+info:
+  title: ChatKit Session API
+  description: |
+    API endpoint for creating ChatKit sessions with VRP problem context.
+    This endpoint initializes a new chat session with OpenAI Agent Builder,
+    passing VRP problem and solution data for AI-powered analysis.
+  version: 1.0.0
+  contact:
+    name: VRP API Explorer
+    url: https://github.com/yourusername/vrp-api-explorer
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://vrp-explorer.example.com
+    description: Production server
+
+tags:
+  - name: ChatKit
+    description: ChatKit session management
+
+paths:
+  /api/chatkit/session:
+    post:
+      summary: Create ChatKit Session
+      description: |
+        Creates a new ChatKit chat session with VRP problem context.
+
+        This endpoint:
+        1. Validates the provided VRP context against Solvice SDK schemas
+        2. Creates a new session with OpenAI Agent Builder workflow
+        3. Injects VRP problem and solution data as session context
+        4. Returns session ID and expiration timestamp
+
+        Sessions expire when the browser session ends or after 24 hours,
+        whichever comes first. Session IDs are stored in browser sessionStorage.
+      operationId: createChatKitSession
+      tags:
+        - ChatKit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+            examples:
+              withSolution:
+                summary: Request with VRP problem and solution
+                value:
+                  vrpContext:
+                    problem:
+                      vehicles:
+                        - id: vehicle_1
+                          capacity: 100
+                          start_location: depot
+                      jobs:
+                        - id: job_1
+                          location: customer_a
+                          demand: 20
+                      locations:
+                        depot:
+                          lat: 40.7128
+                          lng: -74.0060
+                        customer_a:
+                          lat: 40.7580
+                          lng: -73.9855
+                      options:
+                        polylines: true
+                    solution:
+                      routes:
+                        - vehicle_id: vehicle_1
+                          stops:
+                            - location: depot
+                              arrival: "08:00:00"
+                            - location: customer_a
+                              arrival: "08:30:00"
+                            - location: depot
+                              arrival: "09:00:00"
+                      total_distance: 15.2
+                      total_time: 3600
+                    metadata:
+                      timestamp: "2025-10-09T10:30:00Z"
+                      hasValidSolution: true
+                      problemHash: a3b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+                      userNotes: Testing morning delivery scenario
+              withoutSolution:
+                summary: Request with VRP problem only (no solution yet)
+                value:
+                  vrpContext:
+                    problem:
+                      vehicles:
+                        - id: vehicle_1
+                          capacity: 100
+                          start_location: depot
+                      jobs:
+                        - id: job_1
+                          location: customer_a
+                          demand: 20
+                      locations:
+                        depot:
+                          lat: 40.7128
+                          lng: -74.0060
+                        customer_a:
+                          lat: 40.7580
+                          lng: -73.9855
+                    solution: null
+                    metadata:
+                      timestamp: "2025-10-09T10:30:00Z"
+                      hasValidSolution: false
+                      problemHash: a3b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+      responses:
+        '200':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSessionResponse'
+              examples:
+                success:
+                  summary: Successful session creation
+                  value:
+                    sessionId: 550e8400-e29b-41d4-a716-446655440000
+                    workflowId: wf_vrp_analysis_v1_prod
+                    expiresAt: "2025-10-10T10:30:00Z"
+        '400':
+          description: Invalid request - VRP context validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidVrpData:
+                  summary: Invalid VRP problem structure
+                  value:
+                    error: Invalid VRP context
+                    message: VRP problem validation failed - missing required field 'vehicles'
+                    code: INVALID_VRP_CONTEXT
+                    details:
+                      field: problem.vehicles
+                      reason: Required field is missing
+                malformedRequest:
+                  summary: Malformed JSON request
+                  value:
+                    error: Invalid request body
+                    message: Request body must contain 'vrpContext' field
+                    code: MALFORMED_REQUEST
+        '500':
+          description: Internal server error - OpenAI API failure or server misconfiguration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingApiKey:
+                  summary: Missing OpenAI API key
+                  value:
+                    error: Server configuration error
+                    message: OpenAI API key not configured
+                    code: MISSING_API_KEY
+                openaiError:
+                  summary: OpenAI API error
+                  value:
+                    error: OpenAI API error
+                    message: Failed to create chat session with Agent Builder
+                    code: OPENAI_API_ERROR
+                    details:
+                      provider: OpenAI
+                      statusCode: 500
+        '503':
+          description: Service unavailable - Rate limit exceeded or OpenAI service down
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                rateLimit:
+                  summary: Rate limit exceeded
+                  value:
+                    error: Rate limit exceeded
+                    message: Too many session creation requests. Please try again in 60 seconds.
+                    code: RATE_LIMIT_EXCEEDED
+                    details:
+                      retryAfter: 60
+                serviceUnavailable:
+                  summary: OpenAI service unavailable
+                  value:
+                    error: Service unavailable
+                    message: OpenAI Agent Builder service is temporarily unavailable
+                    code: SERVICE_UNAVAILABLE
+
+components:
+  schemas:
+    CreateSessionRequest:
+      type: object
+      required:
+        - vrpContext
+      properties:
+        vrpContext:
+          $ref: '#/components/schemas/VrpChatContext'
+      description: Request body for creating a new ChatKit session
+
+    VrpChatContext:
+      type: object
+      required:
+        - problem
+        - solution
+        - metadata
+      properties:
+        problem:
+          $ref: '#/components/schemas/VrpRequest'
+          description: VRP problem definition (vehicles, jobs, locations, constraints)
+        solution:
+          oneOf:
+            - $ref: '#/components/schemas/VrpSolution'
+            - type: 'null'
+          description: VRP solution results (null if problem not yet solved)
+        metadata:
+          $ref: '#/components/schemas/VrpContextMetadata'
+          description: Additional context metadata
+      description: VRP problem and solution context for chat analysis
+
+    VrpRequest:
+      type: object
+      required:
+        - vehicles
+        - jobs
+        - locations
+      properties:
+        vehicles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vehicle'
+          minItems: 1
+          description: List of available vehicles/resources
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+          minItems: 1
+          description: List of jobs/tasks to be assigned
+        locations:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Location'
+          minProperties: 1
+          description: Map of location IDs to geographic coordinates
+        options:
+          $ref: '#/components/schemas/VrpOptions'
+          description: Optional VRP solver configuration
+      description: VRP problem definition conforming to Solvice SDK schema
+
+    Vehicle:
+      type: object
+      required:
+        - id
+        - start_location
+      properties:
+        id:
+          type: string
+          description: Unique vehicle identifier
+        capacity:
+          type: number
+          minimum: 0
+          description: Vehicle capacity (for demand-based routing)
+        start_location:
+          type: string
+          description: Starting location ID (must exist in locations map)
+        end_location:
+          type: string
+          description: Optional ending location ID (defaults to start_location)
+        time_window:
+          $ref: '#/components/schemas/TimeWindow'
+          description: Optional vehicle availability time window
+      description: Vehicle/resource definition
+
+    Job:
+      type: object
+      required:
+        - id
+        - location
+      properties:
+        id:
+          type: string
+          description: Unique job identifier
+        location:
+          type: string
+          description: Job location ID (must exist in locations map)
+        demand:
+          type: number
+          minimum: 0
+          description: Job demand (capacity consumption)
+        duration:
+          type: number
+          minimum: 0
+          description: Service time duration in seconds
+        time_window:
+          $ref: '#/components/schemas/TimeWindow'
+          description: Optional job time window constraint
+        priority:
+          type: integer
+          minimum: 0
+          description: Job priority (higher = more important)
+      description: Job/task definition
+
+    Location:
+      type: object
+      required:
+        - lat
+        - lng
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Latitude in decimal degrees
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Longitude in decimal degrees
+      description: Geographic location coordinates
+
+    TimeWindow:
+      type: object
+      required:
+        - start
+        - end
+      properties:
+        start:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}:\d{2}$'
+          description: Start time (HH:MM:SS format)
+        end:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}:\d{2}$'
+          description: End time (HH:MM:SS format)
+      description: Time window constraint
+
+    VrpOptions:
+      type: object
+      properties:
+        polylines:
+          type: boolean
+          description: Use actual road geometry instead of straight lines
+        traffic:
+          type: boolean
+          description: Consider traffic conditions in routing
+      description: VRP solver options
+
+    VrpSolution:
+      type: object
+      required:
+        - routes
+      properties:
+        routes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Route'
+          description: Optimized routes for each vehicle
+        total_distance:
+          type: number
+          minimum: 0
+          description: Total distance across all routes (km)
+        total_time:
+          type: number
+          minimum: 0
+          description: Total time across all routes (seconds)
+        unassigned_jobs:
+          type: array
+          items:
+            type: string
+          description: List of jobs that could not be assigned
+      description: VRP solution results from Solvice API
+
+    Route:
+      type: object
+      required:
+        - vehicle_id
+        - stops
+      properties:
+        vehicle_id:
+          type: string
+          description: Vehicle ID for this route
+        stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/Stop'
+          minItems: 1
+          description: Ordered list of stops in the route
+        distance:
+          type: number
+          minimum: 0
+          description: Total distance for this route (km)
+        duration:
+          type: number
+          minimum: 0
+          description: Total duration for this route (seconds)
+      description: Single vehicle route
+
+    Stop:
+      type: object
+      required:
+        - location
+      properties:
+        location:
+          type: string
+          description: Location ID for this stop
+        arrival:
+          type: string
+          format: time
+          description: Arrival time at this stop (HH:MM:SS format)
+        departure:
+          type: string
+          format: time
+          description: Departure time from this stop (HH:MM:SS format)
+        job_id:
+          type: string
+          description: Job ID serviced at this stop (if applicable)
+      description: Single stop in a route
+
+    VrpContextMetadata:
+      type: object
+      required:
+        - timestamp
+        - hasValidSolution
+        - problemHash
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: When this context was captured (ISO 8601 format)
+        hasValidSolution:
+          type: boolean
+          description: Whether solution passed validation
+        problemHash:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: SHA-256 hash of problem data for change detection
+        userNotes:
+          type: string
+          maxLength: 1000
+          description: Optional user-provided context notes
+      description: Metadata about VRP context state
+
+    CreateSessionResponse:
+      type: object
+      required:
+        - sessionId
+        - workflowId
+        - expiresAt
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Unique session identifier (UUID v4)
+          example: 550e8400-e29b-41d4-a716-446655440000
+        workflowId:
+          type: string
+          pattern: '^wf_[a-zA-Z0-9]+$'
+          description: Agent Builder workflow ID
+          example: wf_vrp_analysis_v1_prod
+        expiresAt:
+          type: string
+          format: date-time
+          description: Session expiration timestamp (ISO 8601 format)
+          example: "2025-10-10T10:30:00Z"
+      description: Response containing new session details
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - code
+      properties:
+        error:
+          type: string
+          description: Human-readable error summary
+          example: Invalid VRP context
+        message:
+          type: string
+          description: Detailed error message
+          example: VRP problem validation failed - missing required field 'vehicles'
+        code:
+          type: string
+          enum:
+            - INVALID_VRP_CONTEXT
+            - MALFORMED_REQUEST
+            - MISSING_API_KEY
+            - OPENAI_API_ERROR
+            - RATE_LIMIT_EXCEEDED
+            - SERVICE_UNAVAILABLE
+          description: Machine-readable error code
+          example: INVALID_VRP_CONTEXT
+        details:
+          type: object
+          additionalProperties: true
+          description: Optional additional error details
+          example:
+            field: problem.vehicles
+            reason: Required field is missing
+      description: Error response structure
+
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API key for authentication (development only).
+        In production, this endpoint uses server-side session management.
+
+security:
+  - ApiKey: []
+
+externalDocs:
+  description: OpenAI ChatKit Documentation
+  url: https://github.com/openai/openai-chatkit-starter-app

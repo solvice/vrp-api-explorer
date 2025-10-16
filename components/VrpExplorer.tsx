@@ -1,15 +1,17 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
 import { VrpMap } from './VrpMap'
 import { VrpGantt, JobReorderEvent } from './VrpGantt'
 import { VrpKpiBar } from './VrpKpiBar'
+import { VrpChatKit } from './VrpChatKit'
 import { VrpApiError } from '@/lib/vrp-api'
 import { getSampleVrpData, SampleType } from '@/lib/sample-data'
 import { ValidationResult } from '@/lib/vrp-schema'
+import { API_URL, generateSessionId } from '@/lib/api-config'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { JobExplanationResponse } from 'solvice-vrp-solver/resources/vrp/jobs'
 import { toast, Toaster } from 'sonner'
@@ -46,6 +48,12 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
   // Reordering state
   const [isReordering, setIsReordering] = useState(false)
 
+  // Chat state
+  const [isChatOpen, setIsChatOpen] = useState(false)
+
+  // Ref to track if we're intentionally clearing a job (prevents auto-load from re-triggering)
+  const isClearingJobRef = useRef(false)
+
   // API status - always configured since keys are server-side
   const apiKeyStatus = {
     type: 'user' as const,
@@ -74,11 +82,15 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
     try {
       const toastId = toast.loading('Solving VRP problem...')
 
-      // Make direct API call to our server-side route
-      const response = await fetch('/api/vrp/solve', {
+      // Get session ID for context storage
+      const sessionId = generateSessionId()
+
+      // Make API call to Python backend
+      const response = await fetch(`${API_URL}/vrp/solve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Session-ID': sessionId,
         },
         body: JSON.stringify(vrpRequest.data)
       })
@@ -183,7 +195,7 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
   // Handle job loading
   const handleLoadJob = useCallback(async (jobId: string) => {
     try {
-      const response = await fetch(`/api/vrp/load/${jobId}`)
+      const response = await fetch(`${API_URL}/vrp/jobs/${jobId}/load`)
 
       if (!response.ok) {
         const errorData = await response.json()
@@ -195,7 +207,6 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
       // Replace request data
       if (result.request) {
         setVrpRequest(prev => ({ ...prev, data: result.request }))
-        setVrpResponse(prev => ({ ...prev, data: null, explanation: null })) // Clear any existing solution and explanation
       }
 
       // Load solution if available
@@ -224,13 +235,44 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
 
   // Handle clearing loaded job
   const handleClearJob = useCallback(() => {
-    setJobState({ loadedJobId: null })
+    // Set flag to prevent auto-load from re-triggering
+    isClearingJobRef.current = true
+
+    // Navigate to home to clear URL parameter
     router.push('/', { scroll: false })
+
+    // Reset to default sample data
+    setVrpRequest({
+      data: getSampleVrpData('simple'),
+      sample: 'simple' as SampleType,
+      validation: { valid: true, errors: [] } as ValidationResult
+    })
+
+    // Clear response data
+    setVrpResponse({
+      data: null,
+      explanation: null,
+      isLoading: false
+    })
+
+    // Clear job state
+    setJobState({ loadedJobId: null })
+
     toast.info('Cleared loaded job')
+
+    // Reset flag after navigation completes
+    setTimeout(() => {
+      isClearingJobRef.current = false
+    }, 100)
   }, [router])
 
   // Auto-load job from URL parameter
   useEffect(() => {
+    // Skip if we're intentionally clearing a job
+    if (isClearingJobRef.current) {
+      return
+    }
+
     const runParam = searchParams.get('run')
     if (runParam && runParam !== jobState.loadedJobId) {
       handleLoadJob(runParam).catch(error => {
@@ -241,6 +283,19 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
       })
     }
   }, [searchParams, jobState.loadedJobId, handleLoadJob, router])
+
+  // Keyboard shortcut: Cmd+K / Ctrl+K to toggle chat
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+        event.preventDefault()
+        setIsChatOpen(prev => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   // Handle job reordering with Solvice Change API
   const handleJobReorder = useCallback(async (event: JobReorderEvent) => {
@@ -259,14 +314,14 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
       const toastId = toast.loading('Re-optimizing routes...')
 
       // Call Change API in solve mode for full re-optimization
-      const response = await fetch('/api/vrp/reorder', {
+      const response = await fetch(`${API_URL}/vrp/jobs/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          jobId: event.jobId,
-          afterJobId: event.afterJobId,
+          job_id: event.jobId,
+          after_job_id: event.afterJobId,
           operation: 'solve',  // Full re-optimization mode
-          originalSolutionId
+          original_solution_id: originalSolutionId
         })
       })
 
@@ -381,6 +436,45 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
         expand={false}
         visibleToasts={3}
       />
+
+      {/* Chat Panel */}
+      {enableAiAssistant && isChatOpen && (
+        <div className="fixed inset-y-0 right-0 z-40 w-96 bg-white shadow-2xl border-l border-gray-200 flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">VRP Analysis Chat</h2>
+            <button
+              onClick={() => setIsChatOpen(false)}
+              className="text-gray-500 hover:text-gray-700 transition-colors"
+              aria-label="Close chat"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <VrpChatKit
+              vrpData={vrpRequest.data}
+              solution={vrpResponse.data}
+              onError={(error) => {
+                console.error('Chat error:', error);
+                toast.error('Chat error: ' + error.message);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </>
   )
 }

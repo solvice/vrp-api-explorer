@@ -1,0 +1,6 @@
+fastapi>=0.114.1,<0.116
+uvicorn[standard]>=0.36,<0.37
+openai-chatkit>=1.0.2,<2
+openai>=1.40
+python-dotenv==1.0.1
+openai-agents>=0.1.0

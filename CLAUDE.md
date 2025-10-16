@@ -133,9 +133,15 @@ Required environment variables:
 ```bash
 SOLVICE_API_KEY=your_solvice_api_key_here
 OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_WORKFLOW_ID=wf_xxxxxxxxxxxxx
 ```
 
-These are server-side only environment variables for security. API keys are never exposed to the client-side. The OpenAI API key enables the AI assistant functionality.
+These are server-side only environment variables for security. API keys are never exposed to the client-side.
+
+- `OPENAI_API_KEY`: Enables the ChatKit-based AI assistant functionality
+- `OPENAI_WORKFLOW_ID`: The Agent Builder workflow ID for VRP analysis (create at https://platform.openai.com/playground/agent-builder)
+
+**Important**: If you have `OPENAI_API_KEY` set as a shell environment variable, it will override `.env.local`. Unset it or restart your terminal to ensure the correct key is loaded.
 
 ## Visualization Components
 

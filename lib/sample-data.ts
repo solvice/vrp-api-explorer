@@ -61,7 +61,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
   return {
     jobs: [
       {
-        name: "delivery_gravensteen",
+        name: "gravensteen",
         duration: 900,
         location: {
           latitude: 51.0573,
@@ -69,7 +69,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_belfry_ghent",
+        name: "belfry_ghent",
         duration: 600,
         location: {
           latitude: 51.0538,
@@ -77,7 +77,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_saint_bavos_cathedral",
+        name: "saint_bavos_cathedral",
         duration: 1200,
         location: {
           latitude: 51.0536,
@@ -85,7 +85,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_korenlei",
+        name: "korenlei",
         duration: 900,
         location: {
           latitude: 51.0565,
@@ -93,7 +93,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_ghent_university",
+        name: "ghent_university",
         duration: 800,
         location: {
           latitude: 51.0524,
@@ -101,7 +101,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_vrijdagmarkt",
+        name: "vrijdagmarkt",
         duration: 700,
         location: {
           latitude: 51.059,
@@ -109,7 +109,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_citadel_park",
+        name: "citadel_park",
         duration: 1000,
         location: {
           latitude: 51.0355,
@@ -117,7 +117,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_patershol",
+        name: "patershol",
         duration: 600,
         location: {
           latitude: 51.0602,
@@ -125,7 +125,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_portus_ganda",
+        name: "portus_ganda",
         duration: 850,
         location: {
           latitude: 51.0434,
@@ -133,7 +133,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_muinkpark",
+        name: "muinkpark",
         duration: 750,
         location: {
           latitude: 51.0339,
@@ -141,7 +141,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_kouter_square",
+        name: "kouter_square",
         duration: 650,
         location: {
           latitude: 51.0475,
@@ -149,7 +149,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_saint_peters_abbey",
+        name: "saint_peters_abbey",
         duration: 900,
         location: {
           latitude: 51.0326,
@@ -157,7 +157,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_sint_jacobs_church",
+        name: "sint_jacobs_church",
         duration: 550,
         location: {
           latitude: 51.0548,
@@ -165,7 +165,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_ghent_station",
+        name: "ghent_station",
         duration: 800,
         location: {
           latitude: 51.0357,
@@ -173,7 +173,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_bijloke_site",
+        name: "bijloke_site",
         duration: 950,
         location: {
           latitude: 51.0423,
@@ -181,7 +181,7 @@ function getSimpleTspData(): Vrp.VrpSyncSolveParams {
         },
       },
       {
-        name: "delivery_dampoort_station",
+        name: "dampoort_station",
         duration: 700,
         location: {
           latitude: 51.0686,
@@ -238,6 +238,7 @@ function getLastMileDeliveryData(): Vrp.VrpSyncSolveParams {
       load: [packageLoads[packageType as keyof typeof packageLoads]]
     })
   }
+  
 
   return {
     jobs,
@@ -547,7 +548,7 @@ export function getMinimalSampleData(): Vrp.VrpSyncSolveParams {
   return {
     jobs: [
       {
-        name: "simple_delivery_ghent",
+        name: "simple_ghent",
         duration: 900,
         location: {
           latitude: 51.0538,

@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/.playwright-mcp/chatkit-after-fix.png
+/.playwright-mcp/chatkit-error-state.png
+/.playwright-mcp/chatkit-success.png
+/.playwright-mcp/chatkit-working.png
