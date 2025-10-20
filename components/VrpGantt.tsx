@@ -49,26 +49,45 @@ export function VrpGantt({
   // Create resource-to-color mapping for consistent colors across dates
   const resourceColors = useMemo(() => {
     if (!responseData?.trips) return new Map<string, string>()
-    return createResourceColorMap(responseData.trips)
+    try {
+      return createResourceColorMap(responseData.trips)
+    } catch (error) {
+      console.error('Error creating resource color map:', error)
+      return new Map<string, string>()
+    }
   }, [responseData])
 
   // Extract unique dates from all trips
   const availableDates = useMemo(() => {
     if (!responseData?.trips?.length) return []
 
-    const dateSet = new Set<string>()
-    responseData.trips.forEach(trip => {
-      trip.visits?.forEach(visit => {
-        if (visit.arrival) {
-          const date = new Date(visit.arrival)
-          // Use date string in format YYYY-MM-DD for consistent comparison
-          const dateStr = date.toISOString().split('T')[0]
-          dateSet.add(dateStr)
-        }
+    try {
+      const dateSet = new Set<string>()
+      responseData.trips.forEach(trip => {
+        trip.visits?.forEach(visit => {
+          if (visit.arrival) {
+            try {
+              const date = new Date(visit.arrival)
+              // Validate the date is valid
+              if (isNaN(date.getTime())) {
+                console.warn('Invalid date in visit arrival:', visit.arrival)
+                return
+              }
+              // Use date string in format YYYY-MM-DD for consistent comparison
+              const dateStr = date.toISOString().split('T')[0]
+              dateSet.add(dateStr)
+            } catch (dateError) {
+              console.warn('Error parsing visit arrival date:', visit.arrival, dateError)
+            }
+          }
+        })
       })
-    })
 
-    return Array.from(dateSet).sort()
+      return Array.from(dateSet).sort()
+    } catch (error) {
+      console.error('Error extracting available dates:', error)
+      return []
+    }
   }, [responseData])
 
   // Selected date state - default to first available date
@@ -102,88 +121,146 @@ export function VrpGantt({
       return null
     }
 
-    let minTime = Infinity
-    let maxTime = -Infinity
+    try {
+      let minTime = Infinity
+      let maxTime = -Infinity
 
-    // Find min/max times for selected date only
-    filteredTrips.forEach(trip => {
-      trip.visits?.forEach(visit => {
-        if (visit.arrival) {
-          const arrivalTime = new Date(visit.arrival).getTime()
-          const departureTime = arrivalTime + (visit.serviceTime || 0) * 1000
+      // Find min/max times for selected date only
+      filteredTrips.forEach(trip => {
+        trip.visits?.forEach(visit => {
+          if (visit.arrival) {
+            try {
+              const arrivalTime = new Date(visit.arrival).getTime()
 
-          minTime = Math.min(minTime, arrivalTime)
-          maxTime = Math.max(maxTime, departureTime)
-        }
+              // Validate the date is valid
+              if (isNaN(arrivalTime)) {
+                console.warn('Invalid arrival time:', visit.arrival)
+                return
+              }
+
+              const departureTime = arrivalTime + (visit.serviceTime || 0) * 1000
+
+              minTime = Math.min(minTime, arrivalTime)
+              maxTime = Math.max(maxTime, departureTime)
+            } catch (dateError) {
+              console.warn('Error parsing visit time:', visit.arrival, dateError)
+            }
+          }
+        })
       })
-    })
 
-    if (!isFinite(minTime) || !isFinite(maxTime)) {
+      if (!isFinite(minTime) || !isFinite(maxTime)) {
+        console.warn('Could not determine valid time range for timeline')
+        return null
+      }
+
+      const startDate = new Date(minTime)
+      const endDate = new Date(maxTime)
+
+      // Validate dates
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        console.error('Invalid start or end date for timeline')
+        return null
+      }
+
+      // Round start to hour boundary (floor)
+      startDate.setMinutes(0, 0, 0)
+
+      // Round end to hour boundary (ceil)
+      endDate.setMinutes(59, 59, 999)
+
+      const startTime = startDate.getTime()
+      const endTime = endDate.getTime()
+      const totalDuration = endTime - startTime
+      const totalHours = Math.ceil(totalDuration / (1000 * 60 * 60))
+
+      // Generate hour markers
+      const hours = Array.from({ length: totalHours + 1 }, (_, i) => {
+        return new Date(startTime + i * 60 * 60 * 1000)
+      })
+
+      return {
+        startTime,
+        endTime,
+        totalDuration,
+        hours,
+        totalHours
+      }
+    } catch (error) {
+      console.error('Error calculating timeline data:', error)
       return null
-    }
-
-    const startDate = new Date(minTime)
-    const endDate = new Date(maxTime)
-
-    // Round start to hour boundary (floor)
-    startDate.setMinutes(0, 0, 0)
-
-    // Round end to hour boundary (ceil)
-    endDate.setMinutes(59, 59, 999)
-
-    const startTime = startDate.getTime()
-    const endTime = endDate.getTime()
-    const totalDuration = endTime - startTime
-    const totalHours = Math.ceil(totalDuration / (1000 * 60 * 60))
-
-    // Generate hour markers
-    const hours = Array.from({ length: totalHours + 1 }, (_, i) => {
-      return new Date(startTime + i * 60 * 60 * 1000)
-    })
-
-    return {
-      startTime,
-      endTime,
-      totalDuration,
-      hours,
-      totalHours
     }
   }, [filteredTrips])
 
   // Convert timestamp to percentage position (0-100)
   const timeToPosition = (timestamp: string) => {
     if (!timelineData) return 0
-    const time = new Date(timestamp).getTime()
-    return ((time - timelineData.startTime) / timelineData.totalDuration) * 100
+    try {
+      const time = new Date(timestamp).getTime()
+      if (isNaN(time)) {
+        console.warn('Invalid timestamp in timeToPosition:', timestamp)
+        return 0
+      }
+      return ((time - timelineData.startTime) / timelineData.totalDuration) * 100
+    } catch (error) {
+      console.error('Error converting time to position:', error)
+      return 0
+    }
   }
 
   // Convert arrival/departure times to width percentage
   const calculateWidth = (arrivalTime: string, serviceTime?: number | null) => {
     if (!timelineData) return 0
 
-    const arrival = new Date(arrivalTime).getTime()
-    const departure = arrival + (serviceTime || 0) * 1000
+    try {
+      const arrival = new Date(arrivalTime).getTime()
+      if (isNaN(arrival)) {
+        console.warn('Invalid arrival time in calculateWidth:', arrivalTime)
+        return 0
+      }
+      const departure = arrival + (serviceTime || 0) * 1000
 
-    return ((departure - arrival) / timelineData.totalDuration) * 100
+      return ((departure - arrival) / timelineData.totalDuration) * 100
+    } catch (error) {
+      console.error('Error calculating width:', error)
+      return 0
+    }
   }
 
   // Format time for display
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    })
+    try {
+      if (isNaN(date.getTime())) {
+        return '00:00'
+      }
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })
+    } catch (error) {
+      console.error('Error formatting time:', error)
+      return '00:00'
+    }
   }
 
   // Format date for display (e.g., "Wed, Jan 15")
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr + 'T00:00:00')
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    })
+    try {
+      const date = new Date(dateStr + 'T00:00:00')
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date string in formatDate:', dateStr)
+        return dateStr
+      }
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      })
+    } catch (error) {
+      console.error('Error formatting date:', error)
+      return dateStr
+    }
   }
 
   // Navigation handlers
