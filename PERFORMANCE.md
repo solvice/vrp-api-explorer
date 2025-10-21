@@ -18,10 +18,19 @@ A simplified map component that uses MapLibre circle layers instead of DOM marke
 
 ### When to Use
 
+**Option 1: Automatic (Recommended)**
+```typescript
+import { VrpMapAdaptive } from '@/components/VrpMapAdaptive'
+
+// Automatically uses VrpMap for <1000 jobs, VrpMapOptimized for >=1000 jobs
+<VrpMapAdaptive requestData={data} responseData={solution} />
+```
+
+**Option 2: Manual**
 ```typescript
 import { VrpMapOptimized } from '@/components/VrpMapOptimized'
 
-// Use for large datasets (1000+ jobs)
+// Force optimized version
 <VrpMapOptimized requestData={data} responseData={solution} />
 ```
 
