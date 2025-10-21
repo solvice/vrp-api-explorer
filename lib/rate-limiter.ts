@@ -22,6 +22,7 @@ interface RequestRecord {
 
 class RateLimiter {
   private requests = new Map<string, RequestRecord>()
+  private cleanupIntervalId: NodeJS.Timeout | null = null
 
   /**
    * Check if request is allowed under rate limit
@@ -29,7 +30,7 @@ class RateLimiter {
   check(key: string, config: RateLimitConfig): RateLimitResult {
     const now = Date.now()
     const windowStart = now - config.windowMs
-    
+
     // Get or create request record for this key
     let record = this.requests.get(key)
     if (!record) {
@@ -42,7 +43,7 @@ class RateLimiter {
 
     const currentRequests = record.timestamps.length
     const allowed = currentRequests < config.maxRequests
-    
+
     if (allowed) {
       // Add current request timestamp
       record.timestamps.push(now)
@@ -62,20 +63,71 @@ class RateLimiter {
 
   /**
    * Clean up expired entries to prevent memory leaks
+   * More aggressive TTL (5 minutes) to prevent unbounded memory growth
    */
   cleanup(): void {
     const now = Date.now()
-    const maxAge = 60 * 60 * 1000 // 1 hour
+    const maxAge = 5 * 60 * 1000 // 5 minutes (reduced from 1 hour)
 
+    let deletedCount = 0
     for (const [key, record] of this.requests.entries()) {
       // Remove records with no recent activity
-      const hasRecentActivity = record.timestamps.some(timestamp => 
+      const hasRecentActivity = record.timestamps.some(timestamp =>
         (now - timestamp) < maxAge
       )
-      
+
       if (!hasRecentActivity) {
         this.requests.delete(key)
+        deletedCount++
       }
+    }
+
+    if (deletedCount > 0) {
+      console.log(`[RateLimiter] Cleaned up ${deletedCount} expired entries. Remaining: ${this.requests.size}`)
+    }
+  }
+
+  /**
+   * Start automatic cleanup interval
+   */
+  startCleanup(): void {
+    if (this.cleanupIntervalId) {
+      return // Already running
+    }
+
+    // Run cleanup every 2 minutes (more aggressive than previous 10 minutes)
+    this.cleanupIntervalId = setInterval(() => {
+      this.cleanup()
+    }, 2 * 60 * 1000)
+
+    // Prevent the interval from keeping the Node.js process alive
+    if (this.cleanupIntervalId.unref) {
+      this.cleanupIntervalId.unref()
+    }
+  }
+
+  /**
+   * Stop automatic cleanup interval (for graceful shutdown)
+   */
+  stopCleanup(): void {
+    if (this.cleanupIntervalId) {
+      clearInterval(this.cleanupIntervalId)
+      this.cleanupIntervalId = null
+      console.log('[RateLimiter] Cleanup interval stopped')
+    }
+  }
+
+  /**
+   * Get current statistics for monitoring
+   */
+  getStats(): { totalKeys: number; totalRequests: number } {
+    let totalRequests = 0
+    for (const record of this.requests.values()) {
+      totalRequests += record.timestamps.length
+    }
+    return {
+      totalKeys: this.requests.size,
+      totalRequests
     }
   }
 }
@@ -83,10 +135,30 @@ class RateLimiter {
 // Global rate limiter instance
 const rateLimiter = new RateLimiter()
 
-// Clean up expired entries every 10 minutes
-setInterval(() => {
+// Start automatic cleanup
+rateLimiter.startCleanup()
+
+/**
+ * Gracefully shutdown the rate limiter (stop cleanup interval)
+ * Call this during server shutdown to prevent memory leaks
+ */
+export function shutdownRateLimiter(): void {
+  rateLimiter.stopCleanup()
+}
+
+/**
+ * Get rate limiter statistics for monitoring
+ */
+export function getRateLimiterStats(): { totalKeys: number; totalRequests: number } {
+  return rateLimiter.getStats()
+}
+
+/**
+ * Manually trigger cleanup (useful for testing or forced cleanup)
+ */
+export function cleanupRateLimiter(): void {
   rateLimiter.cleanup()
-}, 10 * 60 * 1000)
+}
 
 /**
  * Default key generator - uses IP address from request
