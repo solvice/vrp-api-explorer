@@ -32,7 +32,6 @@ interface Visit {
   job: string | null
   arrival: string | null
   serviceTime?: number | null
-  [key: string]: any
 }
 
 interface TripWithVisits {
@@ -61,8 +60,8 @@ export function VrpGanttVirtualized({
   highlightedJob,
   onJobHover,
 }: VrpGanttVirtualizedProps) {
-  const [hoveredJob, setHoveredJob] = useState<{ resource: string; job: string } | null>(null)
   const listRef = useRef<List>(null)
+  const [, setHoveredJob] = useState<{ resource: string; job: string } | null>(null)
 
   // Create resource-to-color mapping for consistent colors across dates
   const resourceColors = useMemo(() => {
@@ -338,7 +337,6 @@ export function VrpGanttVirtualized({
   }
 
   const ROW_HEIGHT = 48
-  const HEADER_HEIGHT = 40
 
   return (
     <Card className={cn("w-full h-full flex flex-col p-0", className)}>

@@ -59,9 +59,9 @@ export function generateVrpDataset(
 /**
  * Generate mock solution (for testing without API)
  */
-export function generateMockSolution(request: any) {
-  const jobs = request.jobs || []
-  const resources = request.resources || []
+export function generateMockSolution(request: Record<string, unknown>) {
+  const jobs = (request.jobs as Array<{ name: string; serviceTime?: number }>) || []
+  const resources = (request.resources as Array<{ name: string }>) || []
   const baseTime = new Date()
   baseTime.setDate(baseTime.getDate() + 1)
   baseTime.setHours(8, 0, 0, 0)
@@ -69,8 +69,8 @@ export function generateMockSolution(request: any) {
   const jobsPerVehicle = Math.ceil(jobs.length / resources.length)
   let jobIndex = 0
 
-  const trips = resources.map((resource: any) => {
-    const visits: any[] = []
+  const trips = resources.map((resource) => {
+    const visits: Array<{ job: string; arrival: string; serviceTime: number }> = []
     let currentTime = baseTime.getTime()
 
     for (let i = 0; i < jobsPerVehicle && jobIndex < jobs.length; i++, jobIndex++) {

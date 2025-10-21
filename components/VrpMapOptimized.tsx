@@ -25,17 +25,15 @@ interface VrpMapOptimizedProps {
 export function VrpMapOptimized({
   requestData,
   responseData,
-  className,
-  highlightedJob,
-  onJobHover
+  className
 }: VrpMapOptimizedProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const routeRenderer = useRef<MapRouteRenderer | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const jobFeatures = useRef<any[]>([])
+  const jobFeatures = useRef<GeoJSON.Feature[]>([])
 
-  const { currentStyle, mounted, MAP_STYLES } = useMapStyle({ map: map.current })
+  const { currentStyle, MAP_STYLES } = useMapStyle({ map: map.current })
 
   // Initialize map
   useEffect(() => {
@@ -185,8 +183,9 @@ export function VrpMapOptimized({
 
       source.getClusterExpansionZoom(clusterId, (err, zoom) => {
         if (err) return
+        const geometry = features[0].geometry as GeoJSON.Point
         map.current!.easeTo({
-          center: (features[0].geometry as any).coordinates,
+          center: geometry.coordinates as [number, number],
           zoom: zoom || map.current!.getZoom() + 2
         })
       })
@@ -199,7 +198,7 @@ export function VrpMapOptimized({
       map.current!.getCanvas().style.cursor = ''
     })
 
-  }, [requestData, responseData, onJobHover])
+  }, [requestData, responseData])
 
   useEffect(() => {
     if (!map.current) return
