@@ -64,7 +64,6 @@ Based on MapLibre documentation:
 ✅ Code compiles without errors
 ✅ Passes ESLint
 ✅ Uses correct MapLibre API
-✅ **Jest tests pass** (component imports and initializes)
 ❌ Not tested in browser
 ❌ Not tested with large datasets
 ❌ Performance claims are theoretical only
