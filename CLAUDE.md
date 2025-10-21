@@ -156,6 +156,26 @@ These are server-side only environment variables for security. API keys are neve
 - **Automatic time range**: Calculates timeline span from solution data
 - **Styling**: Uses Shadcn/ui Card component and Tailwind utilities for minimal aesthetic
 
+### Performance Optimizations (for 1,000+ jobs)
+
+For large datasets, use optimized components:
+
+**VrpMapOptimized** (`components/VrpMapOptimized.tsx`):
+- Symbol layers instead of DOM markers (GPU-accelerated via MapLibre GL)
+- Automatic clustering with Supercluster
+- Handles 20,000+ jobs smoothly
+
+**VrpGanttVirtualized** (`components/VrpGanttVirtualized.tsx`):
+- Virtual scrolling with react-window
+- Only renders visible rows (10-20 vs thousands)
+- Constant memory usage
+
+**Test Data Generator** (`lib/test-data-generator.ts`):
+- Generate datasets from 100 to 20,000+ jobs instantly
+- Usage: `createTestData('extreme')` for 20k jobs
+
+See [PERFORMANCE.md](PERFORMANCE.md) for details.
+
 ## AI Assistant Integration
 
 ### VRP Assistant Features
