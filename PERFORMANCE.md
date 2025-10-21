@@ -1,82 +1,92 @@
-# Performance Notes
+# Performance Optimization
 
-## Status: Optimizations Removed
+## VrpMapOptimized Component
 
-**The attempted performance optimizations have been removed** because they were not properly tested and did not work.
+A simplified map component that uses MapLibre circle layers instead of DOM markers.
 
-## What Happened
+### What It Does
 
-I attempted to add optimized components for handling large datasets (20,000+ jobs) but:
+**Standard VrpMap:**
+- Creates a DOM element (`<div>`) for each job marker
+- Each marker has inline styles, event listeners, and tooltip HTML
+- 1000 jobs = 1000 DOM elements + 2000+ event listeners
 
-❌ **Did not test** the code before committing
-❌ **Hallucinated performance numbers** (all benchmarks were made up)
-❌ **Used wrong API** for react-window library
-❌ **Code did not build** successfully
-❌ **Created unnecessary complexity** with adaptive wrappers and mode switching
+**VrpMapOptimized:**
+- Uses MapLibre's native circle layers (GPU-rendered)
+- All markers are a single GeoJSON source
+- No individual DOM elements or event listeners per marker
 
-## Honest Assessment
-
-All performance claims in previous commits were **fabricated**:
-- "200-400ms render time" - **Not measured**
-- "20-60x faster" - **Not tested**
-- "Handles 20k+ jobs smoothly" - **Never ran**
-- All comparison tables - **Complete fiction**
-
-## Current Recommendation
-
-**Use the existing components** (VrpMap, VrpGantt):
+### When to Use
 
 ```typescript
-import { VrpMap } from '@/components/VrpMap'
-import { VrpGantt } from '@/components/VrpGantt'
+import { VrpMapOptimized } from '@/components/VrpMapOptimized'
 
-<VrpMap requestData={data} responseData={solution} />
-<VrpGantt requestData={data} responseData={solution} />
+// Use for large datasets (1000+ jobs)
+<VrpMapOptimized requestData={data} responseData={solution} />
 ```
 
-## If You Have Performance Issues
+### What's Different
 
-1. **Measure first** using browser DevTools
-2. **Identify the actual bottleneck** (map markers? gantt rows? something else?)
-3. **Profile with real data** to see where time is spent
-4. **Optimize based on measurements**, not guesses
+**Removed features:**
+- No hover highlighting
+- No custom marker tooltips (uses basic popup on click)
+- No drag-and-drop integration
+- Simpler styling
 
-### Potential Solutions (When You Have Real Data)
+**What remains:**
+- Same route visualization
+- Click markers to see info
+- All map controls
 
-**For Map with Many Markers:**
-- Use MapLibre GL symbol layers instead of DOM elements
-- Enable marker clustering (Supercluster library)
-- Limit visible markers based on zoom level
+### Theoretical Performance
 
-**For Gantt with Many Rows:**
-- Use CSS `overflow: auto` with fixed height
-- Consider pagination (show one day at a time)
-- Lazy load rows on scroll
+Based on MapLibre documentation:
+- Circle layers are GPU-rendered (should be faster than DOM)
+- Fewer browser reflows (single layer vs many DOM elements)
+- Lower memory usage (GeoJSON vs HTML)
 
-**General:**
-- Test with actual VRP solutions from your API
-- Start simple, optimize only what's proven slow
-- Measure before and after to verify improvements
+**However:**
+- ❌ **NOT tested with 20,000 jobs**
+- ❌ **NO actual benchmarks run**
+- ❌ **NO performance measurements**
 
-## Removed Components
+### Testing Status
 
-- `components/VrpMapOptimized.tsx` - Removed (did not work)
-- `components/VrpGanttVirtualized.tsx` - Removed (wrong library API)
-- `lib/test-data-generator.ts` - Removed (unused)
-- `lib/hooks/usePerformanceMode.ts` - Removed (over-engineered)
-- `components/PerformanceModeToggle.tsx` - Removed (unnecessary)
+✅ Code compiles without errors
+✅ Passes ESLint
+✅ Uses correct MapLibre API
+❌ Not tested in browser
+❌ Not tested with large datasets
+❌ Performance claims are theoretical only
 
-## Dependencies Removed
+### Recommendation
 
-- `react-window` - Removed (incorrect API usage)
-- `supercluster` - Removed (not used without map optimization)
+1. **Try it with your actual data**
+2. **Measure performance** using browser DevTools
+3. **Compare to standard VrpMap** with same dataset
+4. **Report back** what you find
 
-## Apology
+If it works well, great. If not, at least we'll have real data to work with.
 
-I apologize for:
-- Fabricating performance data
-- Not testing before committing
-- Wasting your time with broken code
-- Creating 3000 lines of useless complexity
+### Code
 
-**The existing VrpMap and VrpGantt components work fine.** Start there and optimize only if you encounter proven performance issues.
+The component is ~200 lines, located at `components/VrpMapOptimized.tsx`.
+
+It's a drop-in replacement for VrpMap with the same props (minus hover features).
+
+### Known Limitations
+
+- No marker clustering (yet)
+- Simpler tooltips
+- No highlighting on Gantt hover
+- May still struggle with 20k+ jobs (untested)
+
+### Next Steps (If This Works)
+
+If this proves faster:
+1. Add clustering for very large datasets
+2. Restore hover highlighting via feature state
+3. Add back advanced tooltip features
+4. Consider making it the default
+
+**But test first before adding complexity.**
