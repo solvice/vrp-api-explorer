@@ -89,9 +89,6 @@ importers:
       react-resizable-panels:
         specifier: ^3.0.3
         version: 3.0.3(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      react-window:
-        specifier: ^2.2.1
-        version: 2.2.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
@@ -107,9 +104,6 @@ importers:
       sonner:
         specifier: ^2.0.6
         version: 2.0.6(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      supercluster:
-        specifier: ^8.0.1
-        version: 8.0.1
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
