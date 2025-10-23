@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ChatKit, useChatKit } from '@openai/chatkit-react';
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp';
 import { toast } from 'sonner';
 import { API_URL, generateSessionId } from '@/lib/api-config';
 import { searchEntities, formatEntityPreview } from '@/lib/vrp-entities';
+import { generateStartScreen } from '@/lib/chatkit-prompts';
 
 interface VrpChatKitProps {
   vrpData?: Vrp.VrpSyncSolveParams;
@@ -41,6 +42,12 @@ export function VrpChatKit({ vrpData, solution, onError }: VrpChatKitProps) {
     }
   }, [vrpData, solution, sessionId]);
 
+  // Generate dynamic start screen based on VRP context
+  const startScreenConfig = useMemo(
+    () => generateStartScreen(vrpData, solution),
+    [vrpData, solution]
+  );
+
   // Configure ChatKit to use Python backend
   // Using domainKey approach for custom backend (no session API needed)
   const { control } = useChatKit({
@@ -61,6 +68,7 @@ export function VrpChatKit({ vrpData, solution, onError }: VrpChatKitProps) {
         });
       },
     },
+    startScreen: startScreenConfig,
     entities: {
       onTagSearch: async (query: string) => {
         // Search for jobs and resources matching the query
