@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
-import { VrpMap } from './VrpMap'
+import { VrpMapAdaptive } from './VrpMapAdaptive'
 import { VrpGantt, JobReorderEvent } from './VrpGantt'
 import { VrpKpiBar } from './VrpKpiBar'
 import { VrpAssistantContainer } from './VrpAssistant/VrpAssistantContainer'
@@ -345,7 +345,7 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
           />
         }
         centerPanel={
-          <VrpMap
+          <VrpMapAdaptive
             requestData={vrpRequest.data as unknown as Record<string, unknown>}
             responseData={vrpResponse.data}
             highlightedJob={highlightedJob}

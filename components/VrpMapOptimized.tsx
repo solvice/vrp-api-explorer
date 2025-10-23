@@ -64,7 +64,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
     routeRenderer.current?.clear()
 
     // Remove existing layers and sources
-    const layersToRemove = ['jobs-circles', 'jobs-labels', 'resources-circles']
+    const layersToRemove = ['jobs-circles', 'clusters', 'cluster-count', 'resources-circles']
     layersToRemove.forEach(id => {
       if (map.current?.getLayer(id)) {
         map.current.removeLayer(id)
@@ -111,42 +111,77 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
       })
     })
 
-    // Add jobs source and layers
+    // Add jobs source with clustering enabled
     if (jobFeatures.length > 0 && map.current) {
       map.current.addSource('jobs', {
         type: 'geojson',
-        data: { type: 'FeatureCollection', features: jobFeatures }
+        data: { type: 'FeatureCollection', features: jobFeatures },
+        cluster: true,
+        clusterMaxZoom: 14, // Max zoom to cluster points on
+        clusterRadius: 50 // Radius of each cluster when clustering points
       })
 
-      // Circle layer for job markers
+      // Cluster circles layer
       map.current.addLayer({
-        id: 'jobs-circles',
+        id: 'clusters',
         type: 'circle',
         source: 'jobs',
+        filter: ['has', 'point_count'],
         paint: {
-          'circle-color': ['get', 'color'],
-          'circle-radius': 12,
+          'circle-color': [
+            'step',
+            ['get', 'point_count'],
+            '#51bbd6',
+            100,
+            '#f1f075',
+            750,
+            '#f28cb1'
+          ],
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            20,
+            100,
+            30,
+            750,
+            40
+          ],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff'
         }
       })
 
-      // Text layer for sequence numbers
+      // Cluster count labels
       map.current.addLayer({
-        id: 'jobs-labels',
+        id: 'cluster-count',
         type: 'symbol',
         source: 'jobs',
+        filter: ['has', 'point_count'],
         layout: {
-          'text-field': ['get', 'sequence'],
-          'text-size': 11,
-          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold']
+          'text-field': '{point_count_abbreviated}',
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 12
         },
         paint: {
           'text-color': '#ffffff'
         }
       })
 
-      // Click handler for popups
+      // Individual unclustered job circles (no sequence numbers - too expensive)
+      map.current.addLayer({
+        id: 'jobs-circles',
+        type: 'circle',
+        source: 'jobs',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-color': ['get', 'color'],
+          'circle-radius': 8,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
+        }
+      })
+
+      // Click handler for individual jobs - show popup
       map.current.on('click', 'jobs-circles', (e) => {
         if (!e.features?.[0]) return
         const props = e.features[0].properties
@@ -162,11 +197,37 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
           .addTo(map.current!)
       })
 
-      // Cursor pointer on hover
+      // Click handler for clusters - zoom in
+      map.current.on('click', 'clusters', (e) => {
+        if (!e.features?.[0] || !map.current) return
+        const features = map.current.queryRenderedFeatures(e.point, {
+          layers: ['clusters']
+        })
+        const clusterId = features[0]?.properties?.cluster_id
+        const source = map.current.getSource('jobs') as maplibregl.GeoJSONSource
+
+        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err || !map.current) return
+          map.current.easeTo({
+            center: (features[0].geometry as GeoJSON.Point).coordinates as [number, number],
+            zoom: zoom
+          })
+        })
+      })
+
+      // Cursor pointer on hover - jobs
       map.current.on('mouseenter', 'jobs-circles', () => {
         if (map.current) map.current.getCanvas().style.cursor = 'pointer'
       })
       map.current.on('mouseleave', 'jobs-circles', () => {
+        if (map.current) map.current.getCanvas().style.cursor = ''
+      })
+
+      // Cursor pointer on hover - clusters
+      map.current.on('mouseenter', 'clusters', () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer'
+      })
+      map.current.on('mouseleave', 'clusters', () => {
         if (map.current) map.current.getCanvas().style.cursor = ''
       })
 
