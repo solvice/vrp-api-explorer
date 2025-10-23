@@ -152,7 +152,10 @@ export class MapRouteRenderer {
   renderRoutes(
     trips: Vrp.OnRouteResponse['trips'],
     requestData: Record<string, unknown>,
-    resourceColors: Map<string, string>
+    resourceColors: Map<string, string>,
+    options?: {
+      simplified?: boolean // Use minimal styling for large datasets
+    }
   ): void {
     if (!trips) return
 
@@ -208,82 +211,104 @@ export class MapRouteRenderer {
 
       this.routeSourceIds.push(routeId)
 
-      // Add route shadow for better visibility
-      this.map.addLayer({
-        id: shadowId,
-        type: 'line',
-        source: routeId,
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': '#000000',
-          'line-width': 6,
-          'line-opacity': 0.2
-        }
-      })
+      // Use simplified styling for large datasets
+      const isSimplified = options?.simplified
 
-      // Add main route layer
-      this.map.addLayer({
-        id: lineId,
-        type: 'line',
-        source: routeId,
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': color,
-          'line-width': 4,
-          'line-opacity': 0.9
-        }
-      })
+      if (isSimplified) {
+        // Simplified: thin gray semi-transparent lines, no shadow, no hover
+        this.map.addLayer({
+          id: lineId,
+          type: 'line',
+          source: routeId,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#94a3b8', // gray-400
+            'line-width': 1.5,
+            'line-opacity': 0.4
+          }
+        })
+      } else {
+        // Standard: colored lines with shadow and hover effects
+        // Add route shadow for better visibility
+        this.map.addLayer({
+          id: shadowId,
+          type: 'line',
+          source: routeId,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#000000',
+            'line-width': 6,
+            'line-opacity': 0.2
+          }
+        })
 
-      // Create and store event handlers
-      const handlers: LayerEventHandlers = {
-        mouseenter: () => {
-          this.map.setPaintProperty(lineId, 'line-width', 6)
-          this.map.setPaintProperty(lineId, 'line-opacity', 1)
-          this.map.getCanvas().style.cursor = 'pointer'
-        },
-        mouseleave: () => {
-          this.map.setPaintProperty(lineId, 'line-width', 4)
-          this.map.setPaintProperty(lineId, 'line-opacity', 0.9)
-          this.map.getCanvas().style.cursor = ''
-        },
-        click: (e) => {
-          const feature = e.features?.[0]
-          if (feature) {
-            const properties = feature.properties
-            const isActualRoute = properties?.isActualRoute
-            const coordinateCount = properties?.coordinateCount || 0
+        // Add main route layer
+        this.map.addLayer({
+          id: lineId,
+          type: 'line',
+          source: routeId,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': color,
+            'line-width': 4,
+            'line-opacity': 0.9
+          }
+        })
 
-            new maplibregl.Popup()
-              .setLngLat(e.lngLat)
-              .setHTML(`
-                <div class="p-3">
-                  <div class="font-semibold text-gray-900 mb-2">${properties?.resourceName}</div>
-                  <div class="text-sm text-gray-600 mb-1">Route ${(properties?.tripIndex || 0) + 1}</div>
-                  <div class="text-sm text-gray-600 mb-1">${properties?.visitCount || 0} stops</div>
-                  ${isActualRoute ?
-                    `<div class="text-sm text-green-600">✓ Actual route geometry (${coordinateCount} points)</div>` :
-                    `<div class="text-sm text-blue-600">⭢ Straight-line approximation</div>`
-                  }
-                </div>
-              `)
-              .addTo(this.map)
+        // Create and store event handlers
+        const handlers: LayerEventHandlers = {
+          mouseenter: () => {
+            this.map.setPaintProperty(lineId, 'line-width', 6)
+            this.map.setPaintProperty(lineId, 'line-opacity', 1)
+            this.map.getCanvas().style.cursor = 'pointer'
+          },
+          mouseleave: () => {
+            this.map.setPaintProperty(lineId, 'line-width', 4)
+            this.map.setPaintProperty(lineId, 'line-opacity', 0.9)
+            this.map.getCanvas().style.cursor = ''
+          },
+          click: (e) => {
+            const feature = e.features?.[0]
+            if (feature) {
+              const properties = feature.properties
+              const isActualRoute = properties?.isActualRoute
+              const coordinateCount = properties?.coordinateCount || 0
+
+              new maplibregl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(`
+                  <div class="p-3">
+                    <div class="font-semibold text-gray-900 mb-2">${properties?.resourceName}</div>
+                    <div class="text-sm text-gray-600 mb-1">Route ${(properties?.tripIndex || 0) + 1}</div>
+                    <div class="text-sm text-gray-600 mb-1">${properties?.visitCount || 0} stops</div>
+                    ${isActualRoute ?
+                      `<div class="text-sm text-green-600">✓ Actual route geometry (${coordinateCount} points)</div>` :
+                      `<div class="text-sm text-blue-600">⭢ Straight-line approximation</div>`
+                    }
+                  </div>
+                `)
+                .addTo(this.map)
+            }
           }
         }
+
+        // Store handlers for cleanup
+        this.eventHandlers.set(lineId, handlers)
+
+        // Add route hover effects
+        this.map.on('mouseenter', lineId, handlers.mouseenter)
+        this.map.on('mouseleave', lineId, handlers.mouseleave)
+        this.map.on('click', lineId, handlers.click)
       }
-
-      // Store handlers for cleanup
-      this.eventHandlers.set(lineId, handlers)
-
-      // Add route hover effects
-      this.map.on('mouseenter', lineId, handlers.mouseenter)
-      this.map.on('mouseleave', lineId, handlers.mouseleave)
-      this.map.on('click', lineId, handlers.click)
     })
   }
 }

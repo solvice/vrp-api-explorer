@@ -236,8 +236,10 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
         map.current.fitBounds(bounds, { padding: 50 })
       }
 
-      // Render routes
-      routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors)
+      // Render routes with simplified styling for large datasets
+      routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors, {
+        simplified: true
+      })
     }
   }, [requestData, responseData])
 

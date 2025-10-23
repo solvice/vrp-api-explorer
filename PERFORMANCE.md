@@ -2,7 +2,7 @@
 
 ## VrpMapOptimized Component
 
-A simplified map component that uses MapLibre circle layers instead of DOM markers.
+A simplified map component that uses MapLibre circle layers with clustering instead of DOM markers.
 
 ### What It Does
 
@@ -13,8 +13,9 @@ A simplified map component that uses MapLibre circle layers instead of DOM marke
 
 **VrpMapOptimized:**
 - Uses MapLibre's native circle layers (GPU-rendered)
-- All markers are a single GeoJSON source
-- No individual DOM elements or event listeners per marker
+- All markers are a single GeoJSON source with clustering enabled
+- Nearby markers group into clusters at low zoom levels
+- No individual DOM elements, text labels, or per-marker event listeners
 
 ### When to Use
 
