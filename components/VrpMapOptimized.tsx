@@ -59,7 +59,16 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
 
   // Render map data using circle layers
   const renderMapData = useCallback(() => {
-    if (!map.current || !map.current.isStyleLoaded()) return
+    console.log('🗺️ VrpMapOptimized: renderMapData called', {
+      hasMap: !!map.current,
+      isStyleLoaded: map.current?.isStyleLoaded(),
+      hasResponseData: !!responseData
+    })
+
+    if (!map.current || !map.current.isStyleLoaded()) {
+      console.log('⚠️ VrpMapOptimized: Skipping render - map not ready')
+      return
+    }
 
     routeRenderer.current?.clear()
 
@@ -256,11 +265,25 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
   }, [requestData, responseData])
 
   useEffect(() => {
-    if (!map.current) return
+    console.log('🗺️ VrpMapOptimized: useEffect triggered', {
+      hasMap: !!map.current,
+      isStyleLoaded: map.current?.isStyleLoaded(),
+      hasRequestData: !!requestData,
+      hasResponseData: !!responseData
+    })
+
+    if (!map.current) {
+      console.log('⚠️ VrpMapOptimized: No map yet')
+      return
+    }
+
     if (!map.current.isStyleLoaded()) {
+      console.log('⏳ VrpMapOptimized: Waiting for style to load')
       map.current.once('styledata', renderMapData)
       return
     }
+
+    console.log('✅ VrpMapOptimized: Calling renderMapData directly')
     renderMapData()
   }, [requestData, responseData, renderMapData])
 
