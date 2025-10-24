@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-})
-
 export interface ExecutionLog {
   id: string
   stepNumber: number
@@ -32,6 +27,17 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Initialize OpenAI client inside handler (not at module level)
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured on server' },
+        { status: 500 }
+      )
+    }
+
+    const openai = new OpenAI({ apiKey })
 
     console.log('🔍 Fetching execution logs for:', { threadId, runId })
 
