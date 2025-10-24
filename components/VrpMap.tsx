@@ -43,35 +43,50 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
   useEffect(() => {
     if (!mapContainer.current || map.current) return
 
-    const selectedStyle = MAP_STYLES.find(s => s.id === currentStyle) || MAP_STYLES[0]
+    try {
+      const selectedStyle = MAP_STYLES.find(s => s.id === currentStyle) || MAP_STYLES[0]
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
-      style: selectedStyle.url,
-      center: [3.7250, 51.0538], // Ghent center
-      zoom: 11
-    })
+      map.current = new maplibregl.Map({
+        container: mapContainer.current,
+        style: selectedStyle.url,
+        center: [3.7250, 51.0538], // Ghent center
+        zoom: 11
+      })
 
-    // Initialize route renderer
-    routeRenderer.current = new MapRouteRenderer(map.current)
+      // Initialize route renderer
+      routeRenderer.current = new MapRouteRenderer(map.current)
 
-    // Add navigation controls with both zoom and compass disabled
-    map.current.addControl(new maplibregl.NavigationControl({ showZoom: false, showCompass: false }), 'top-right')
+      // Add navigation controls with both zoom and compass disabled
+      map.current.addControl(new maplibregl.NavigationControl({ showZoom: false, showCompass: false }), 'top-right')
 
-    // Handle loading state
-    map.current.on('load', () => {
+      // Handle loading state
+      map.current.on('load', () => {
+        setIsLoading(false)
+      })
+
+      // Handle style changes
+      map.current.on('styledata', () => {
+        setIsLoading(false)
+      })
+
+      // Handle map errors
+      map.current.on('error', (e) => {
+        console.error('Map error:', e)
+        setIsLoading(false)
+      })
+    } catch (error) {
+      console.error('Failed to initialize map:', error)
       setIsLoading(false)
-    })
-
-    // Handle style changes
-    map.current.on('styledata', () => {
-      setIsLoading(false)
-    })
+    }
 
     return () => {
-      if (map.current) {
-        map.current.remove()
-        map.current = null
+      try {
+        if (map.current) {
+          map.current.remove()
+          map.current = null
+        }
+      } catch (error) {
+        console.error('Error cleaning up map:', error)
       }
     }
   }, [currentStyle, MAP_STYLES])
@@ -89,66 +104,77 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
       isStyleLoaded: map.current.isStyleLoaded()
     })
 
-    // Clear existing visualizations
-    markerManager.current.clear()
-    routeRenderer.current?.clear()
+    try {
+      // Clear existing visualizations
+      markerManager.current.clear()
+      routeRenderer.current?.clear()
 
-    if (responseData) {
-      // Render solution data (routes + numbered markers)
-      console.log('🗺️ VrpMap: Rendering solution data')
+      if (responseData) {
+        // Render solution data (routes + numbered markers)
+        console.log('🗺️ VrpMap: Rendering solution data')
 
-      const resourceColors = createResourceColorMap(responseData.trips)
-      const bounds = new maplibregl.LngLatBounds()
+        const resourceColors = createResourceColorMap(responseData.trips)
+        const bounds = new maplibregl.LngLatBounds()
 
-      // Add resource markers
-      const resources = requestData.resources as Array<{
-        name?: string
-        shifts?: Array<{ start?: { longitude: number; latitude: number } }>
-      }> | undefined
+        // Add resource markers
+        const resources = requestData.resources as Array<{
+          name?: string
+          shifts?: Array<{ start?: { longitude: number; latitude: number } }>
+        }> | undefined
 
-      markerManager.current.addResourceMarkers(resources, map.current, bounds, onJobHover)
+        markerManager.current.addResourceMarkers(resources, map.current, bounds, onJobHover)
 
-      // Add job markers with sequence numbers
-      const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-      markerManager.current.addJobMarkers(
-        responseData.trips,
-        jobs,
-        resourceColors,
-        map.current,
-        bounds,
-        onJobHover
-      )
+        // Add job markers with sequence numbers
+        const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
+        markerManager.current.addJobMarkers(
+          responseData.trips,
+          jobs,
+          resourceColors,
+          map.current,
+          bounds,
+          onJobHover
+        )
 
-      // Fit map to bounds
-      if (!bounds.isEmpty()) {
-        map.current.fitBounds(bounds, { padding: 50 })
+        // Fit map to bounds
+        if (!bounds.isEmpty()) {
+          map.current.fitBounds(bounds, { padding: 50 })
+        }
+
+        // Render routes
+        routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors)
+
+      } else {
+        // Render request data only (markers without routes)
+        console.log('🗺️ VrpMap: Rendering request data only')
+
+        const bounds = new maplibregl.LngLatBounds()
+
+        // Add resource markers
+        const resources = requestData.resources as Array<Record<string, unknown>> | undefined
+        const resourcesTyped = resources as Array<{
+          name?: string
+          shifts?: Array<{ start?: { longitude: number; latitude: number } }>
+        }> | undefined
+
+        markerManager.current.addResourceMarkers(resourcesTyped, map.current, bounds, onJobHover)
+
+        // Add simple job markers
+        const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
+        markerManager.current.addSimpleJobMarkers(jobs, map.current, bounds, onJobHover)
+
+        // Fit map to bounds
+        if (!bounds.isEmpty()) {
+          map.current.fitBounds(bounds, { padding: 50 })
+        }
       }
-
-      // Render routes
-      routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors)
-
-    } else {
-      // Render request data only (markers without routes)
-      console.log('🗺️ VrpMap: Rendering request data only')
-
-      const bounds = new maplibregl.LngLatBounds()
-
-      // Add resource markers
-      const resources = requestData.resources as Array<Record<string, unknown>> | undefined
-      const resourcesTyped = resources as Array<{
-        name?: string
-        shifts?: Array<{ start?: { longitude: number; latitude: number } }>
-      }> | undefined
-
-      markerManager.current.addResourceMarkers(resourcesTyped, map.current, bounds, onJobHover)
-
-      // Add simple job markers
-      const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
-      markerManager.current.addSimpleJobMarkers(jobs, map.current, bounds, onJobHover)
-
-      // Fit map to bounds
-      if (!bounds.isEmpty()) {
-        map.current.fitBounds(bounds, { padding: 50 })
+    } catch (error) {
+      console.error('Error rendering map data:', error)
+      // Clear any partial renders to prevent inconsistent state
+      try {
+        markerManager.current.clear()
+        routeRenderer.current?.clear()
+      } catch (clearError) {
+        console.error('Error clearing map after render failure:', clearError)
       }
     }
   }, [requestData, responseData, onJobHover])
