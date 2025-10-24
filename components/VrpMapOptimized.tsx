@@ -61,12 +61,11 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
   const renderMapData = useCallback(() => {
     console.log('🗺️ VrpMapOptimized: renderMapData called', {
       hasMap: !!map.current,
-      isStyleLoaded: map.current?.isStyleLoaded(),
       hasResponseData: !!responseData
     })
 
-    if (!map.current || !map.current.isStyleLoaded()) {
-      console.log('⚠️ VrpMapOptimized: Skipping render - map not ready')
+    if (!map.current) {
+      console.log('⚠️ VrpMapOptimized: Skipping render - no map')
       return
     }
 
