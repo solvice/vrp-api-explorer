@@ -27,8 +27,35 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
   const map = useRef<maplibregl.Map | null>(null)
   const routeRenderer = useRef<MapRouteRenderer | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const hoveredResource = useRef<string | null>(null)
 
   const { currentStyle, MAP_STYLES } = useMapStyle({ map: map.current })
+
+  // Highlight route for a specific resource
+  const highlightRoute = useCallback((resourceName: string | null) => {
+    if (!map.current || !responseData?.trips) return
+
+    hoveredResource.current = resourceName
+
+    // Update opacity of all route layers
+    responseData.trips.forEach((trip, idx) => {
+      const lineId = `line-${idx}`
+      if (map.current?.getLayer(lineId)) {
+        if (resourceName === null) {
+          // No hover - show all routes with default opacity
+          map.current.setPaintProperty(lineId, 'line-opacity', 0.4)
+        } else if (trip.resource === resourceName) {
+          // Highlight this route
+          map.current.setPaintProperty(lineId, 'line-opacity', 0.9)
+          map.current.setPaintProperty(lineId, 'line-width', 2.5)
+        } else {
+          // Dim other routes
+          map.current.setPaintProperty(lineId, 'line-opacity', 0.1)
+          map.current.setPaintProperty(lineId, 'line-width', 1.5)
+        }
+      }
+    })
+  }, [responseData])
 
   // Initialize map
   useEffect(() => {
@@ -173,12 +200,22 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
           .addTo(map.current!)
       })
 
-      // Cursor pointer on hover
-      map.current.on('mouseenter', 'jobs-circles', () => {
+      // Hover handlers - highlight route on marker hover
+      map.current.on('mouseenter', 'jobs-circles', (e) => {
         if (map.current) map.current.getCanvas().style.cursor = 'pointer'
+
+        // Highlight the route for this marker's resource
+        const resourceName = e.features?.[0]?.properties?.resource
+        if (resourceName) {
+          highlightRoute(resourceName)
+        }
       })
+
       map.current.on('mouseleave', 'jobs-circles', () => {
         if (map.current) map.current.getCanvas().style.cursor = ''
+
+        // Reset route highlighting
+        highlightRoute(null)
       })
 
       // Fit bounds
@@ -186,7 +223,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
         map.current.fitBounds(bounds, { padding: 50 })
       }
     }
-  }, [requestData, responseData])
+  }, [requestData, responseData, highlightRoute])
 
   useEffect(() => {
     console.log('🗺️ VrpMapOptimized: useEffect triggered', {
