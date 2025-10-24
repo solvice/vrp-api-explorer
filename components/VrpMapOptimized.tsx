@@ -72,7 +72,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
     routeRenderer.current?.clear()
 
     // Remove existing layers and sources
-    const layersToRemove = ['jobs-circles', 'clusters', 'cluster-count', 'resources-circles']
+    const layersToRemove = ['jobs-circles', 'clusters', 'resources-circles']
     layersToRemove.forEach(id => {
       if (map.current?.getLayer(id)) {
         map.current.removeLayer(id)
@@ -176,21 +176,8 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
         }
       })
 
-      // Cluster count labels
-      map.current.addLayer({
-        id: 'cluster-count',
-        type: 'symbol',
-        source: 'jobs',
-        filter: ['has', 'point_count'],
-        layout: {
-          'text-field': '{point_count_abbreviated}',
-          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-          'text-size': 12
-        },
-        paint: {
-          'text-color': '#ffffff'
-        }
-      })
+      // Cluster count labels removed - font loading was causing errors
+      // Click clusters to zoom in instead
 
       // Individual unclustered job circles (no sequence numbers - too expensive)
       map.current.addLayer({
