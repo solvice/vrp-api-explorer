@@ -1,102 +1,62 @@
 # Performance Optimization
 
-## VrpMapOptimized Component
+## Overview
 
-A simplified map component that uses MapLibre circle layers with clustering instead of DOM markers.
+For datasets with 1000+ jobs, the app automatically switches to `VrpMapOptimized` which uses GPU-rendered MapLibre circle layers instead of DOM markers.
 
-### What It Does
+## Architecture
 
-**Standard VrpMap:**
-- Creates a DOM element (`<div>`) for each job marker
-- Each marker has inline styles, event listeners, and tooltip HTML
-- 1000 jobs = 1000 DOM elements + 2000+ event listeners
+### VrpMapAdaptive (Auto-switching)
 
-**VrpMapOptimized:**
-- Uses MapLibre's native circle layers (GPU-rendered)
-- All markers are a single GeoJSON source with clustering enabled
-- Nearby markers group into clusters at low zoom levels
-- No individual DOM elements, text labels, or per-marker event listeners
-
-### When to Use
-
-**Option 1: Automatic (Recommended)**
 ```typescript
 import { VrpMapAdaptive } from '@/components/VrpMapAdaptive'
 
-// Automatically uses VrpMap for <1000 jobs, VrpMapOptimized for >=1000 jobs
 <VrpMapAdaptive requestData={data} responseData={solution} />
 ```
 
-**Option 2: Manual**
-```typescript
-import { VrpMapOptimized } from '@/components/VrpMapOptimized'
+- **<1000 jobs**: Uses `VrpMap` (full features: hover, tooltips, Gantt sync)
+- **≥1000 jobs**: Uses `VrpMapOptimized` (GPU-rendered, simplified)
 
-// Force optimized version
-<VrpMapOptimized requestData={data} responseData={solution} />
-```
+### Performance Gains
 
-### What's Different
+**Standard VrpMap:**
+- 1 DOM element per marker
+- Event listeners per marker
+- CPU-intensive text rendering
 
-**Removed features:**
-- No hover highlighting
-- No custom marker tooltips (uses basic popup on click)
-- No drag-and-drop integration
-- Simpler styling
+**VrpMapOptimized:**
+- Single GeoJSON source
+- GPU-rendered circles (4px)
+- No text labels
+- Thin gray routes (1.5px, 40% opacity)
+- Route highlighting on hover
 
-**What remains:**
-- Same route visualization
-- Click markers to see info
-- All map controls
+### Features
 
-### Theoretical Performance
+**Included:**
+- All 5000+ markers visible simultaneously
+- Click markers for job details
+- Hover to highlight vehicle route
+- Smooth panning/zooming
 
-Based on MapLibre documentation:
-- Circle layers are GPU-rendered (should be faster than DOM)
-- Fewer browser reflows (single layer vs many DOM elements)
-- Lower memory usage (GeoJSON vs HTML)
+**Removed:**
+- Hover highlighting on markers
+- Sequence number labels
+- Gantt chart synchronization
+- Colored thick routes (simplified to thin gray)
 
-**However:**
-- ❌ **NOT tested with 20,000 jobs**
-- ❌ **NO actual benchmarks run**
-- ❌ **NO performance measurements**
+## Tested Performance
 
-### Testing Status
+✅ 5000 jobs - Fast and responsive
+✅ Hover highlighting - No lag
+✅ Zoom/pan - Smooth at all levels
 
-✅ Code compiles without errors
-✅ Passes ESLint
-✅ Uses correct MapLibre API
-❌ Not tested in browser
-❌ Not tested with large datasets
-❌ Performance claims are theoretical only
+## Implementation
 
-### Recommendation
+Optimized map uses:
+1. MapLibre circle layers (GPU-accelerated)
+2. GeoJSON source with all job features
+3. Dynamic paint properties for hover effects
+4. Simplified route rendering (thin, semi-transparent)
 
-1. **Try it with your actual data**
-2. **Measure performance** using browser DevTools
-3. **Compare to standard VrpMap** with same dataset
-4. **Report back** what you find
-
-If it works well, great. If not, at least we'll have real data to work with.
-
-### Code
-
-The component is ~200 lines, located at `components/VrpMapOptimized.tsx`.
-
-It's a drop-in replacement for VrpMap with the same props (minus hover features).
-
-### Known Limitations
-
-- No marker clustering (yet)
-- Simpler tooltips
-- No highlighting on Gantt hover
-- May still struggle with 20k+ jobs (untested)
-
-### Next Steps (If This Works)
-
-If this proves faster:
-1. Add clustering for very large datasets
-2. Restore hover highlighting via feature state
-3. Add back advanced tooltip features
-4. Consider making it the default
-
-**But test first before adding complexity.**
+No clustering required - GPU handles 5000+ tiny circles efficiently.

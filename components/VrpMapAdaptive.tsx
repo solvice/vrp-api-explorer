@@ -13,30 +13,17 @@ interface VrpMapAdaptiveProps {
 }
 
 /**
- * Automatically chooses between VrpMap and VrpMapOptimized based on job count.
- *
- * - < 1000 jobs: Uses standard VrpMap (full features)
- * - >= 1000 jobs: Uses VrpMapOptimized (better performance, fewer features)
+ * Auto-switches between standard and optimized map based on job count.
+ * - <1000 jobs: VrpMap (full features)
+ * - ≥1000 jobs: VrpMapOptimized (GPU-rendered, better performance)
  */
 export function VrpMapAdaptive(props: VrpMapAdaptiveProps) {
   const jobs = props.requestData.jobs as Array<unknown> | undefined
   const jobCount = jobs?.length || 0
 
-  console.log('🔀 VrpMapAdaptive: Choosing map component', {
-    jobCount,
-    threshold: 1000,
-    willUseOptimized: jobCount >= 1000,
-    hasRequestData: !!props.requestData,
-    hasResponseData: !!props.responseData
-  })
-
-  // Use optimized version for large datasets
   if (jobCount >= 1000) {
-    console.log('✅ VrpMapAdaptive: Using VrpMapOptimized')
     return <VrpMapOptimized {...props} />
   }
 
-  // Use standard version for normal datasets (has all features)
-  console.log('✅ VrpMapAdaptive: Using VrpMap')
   return <VrpMap {...props} />
 }

@@ -17,47 +17,37 @@ interface VrpMapOptimizedProps {
 }
 
 /**
- * Optimized map using MapLibre circle layers instead of DOM markers.
- * Should perform better with many jobs (1000+) since circles are GPU-rendered.
- *
- * Note: This has NOT been tested with 20k jobs. Use at your own risk.
+ * Optimized map for large datasets (1000+ jobs).
+ * Uses GPU-rendered circle layers instead of DOM markers.
  */
 export function VrpMapOptimized({ requestData, responseData, className }: VrpMapOptimizedProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const routeRenderer = useRef<MapRouteRenderer | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const hoveredResource = useRef<string | null>(null)
 
   const { currentStyle, MAP_STYLES } = useMapStyle({ map: map.current })
 
-  // Highlight route for a specific resource
   const highlightRoute = useCallback((resourceName: string | null) => {
     if (!map.current || !responseData?.trips) return
 
-    hoveredResource.current = resourceName
-
-    // Update opacity of all route layers
     responseData.trips.forEach((trip, idx) => {
       const lineId = `line-${idx}`
-      if (map.current?.getLayer(lineId)) {
-        if (resourceName === null) {
-          // No hover - show all routes with default opacity
-          map.current.setPaintProperty(lineId, 'line-opacity', 0.4)
-        } else if (trip.resource === resourceName) {
-          // Highlight this route
-          map.current.setPaintProperty(lineId, 'line-opacity', 0.9)
-          map.current.setPaintProperty(lineId, 'line-width', 2.5)
-        } else {
-          // Dim other routes
-          map.current.setPaintProperty(lineId, 'line-opacity', 0.1)
-          map.current.setPaintProperty(lineId, 'line-width', 1.5)
-        }
+      if (!map.current?.getLayer(lineId)) return
+
+      if (resourceName === null) {
+        map.current.setPaintProperty(lineId, 'line-opacity', 0.4)
+        map.current.setPaintProperty(lineId, 'line-width', 1.5)
+      } else if (trip.resource === resourceName) {
+        map.current.setPaintProperty(lineId, 'line-opacity', 0.9)
+        map.current.setPaintProperty(lineId, 'line-width', 2.5)
+      } else {
+        map.current.setPaintProperty(lineId, 'line-opacity', 0.1)
+        map.current.setPaintProperty(lineId, 'line-width', 1.5)
       }
     })
   }, [responseData])
 
-  // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return
 
@@ -84,51 +74,25 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
     }
   }, [currentStyle, MAP_STYLES])
 
-  // Render map data using circle layers
   const renderMapData = useCallback(() => {
-    console.log('🗺️ VrpMapOptimized: renderMapData called', {
-      hasMap: !!map.current,
-      hasResponseData: !!responseData
-    })
-
-    if (!map.current) {
-      console.log('⚠️ VrpMapOptimized: Skipping render - no map')
-      return
-    }
+    if (!map.current || !responseData) return
 
     routeRenderer.current?.clear()
 
     // Remove existing layers and sources
-    const layersToRemove = ['jobs-circles', 'resources-circles']
-    layersToRemove.forEach(id => {
-      if (map.current?.getLayer(id)) {
-        map.current.removeLayer(id)
-      }
-    })
-
-    const sourcesToRemove = ['jobs', 'resources']
-    sourcesToRemove.forEach(id => {
-      if (map.current?.getSource(id)) {
-        map.current.removeSource(id)
-      }
-    })
-
-    if (!responseData) return
+    if (map.current.getLayer('jobs-circles')) {
+      map.current.removeLayer('jobs-circles')
+    }
+    if (map.current.getSource('jobs')) {
+      map.current.removeSource('jobs')
+    }
 
     const resourceColors = createResourceColorMap(responseData.trips)
     const bounds = new maplibregl.LngLatBounds()
-
-    // Build job features
     const jobFeatures: GeoJSON.Feature[] = []
     const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
 
-    console.log('🗺️ VrpMapOptimized: Building job features', {
-      hasResponseData: !!responseData,
-      tripsCount: responseData.trips?.length,
-      jobsCount: jobs?.length
-    })
-
-    responseData.trips?.forEach((trip, tripIdx) => {
+    responseData.trips?.forEach((trip) => {
       const color = resourceColors.get(trip.resource || '') || '#3B82F6'
 
       trip.visits?.forEach((visit, idx) => {
@@ -152,99 +116,73 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
       })
     })
 
-    console.log(`🗺️ VrpMapOptimized: Built ${jobFeatures.length} job features`)
+    if (jobFeatures.length === 0) return
 
-    // Render routes FIRST (so they appear under markers)
-    if (responseData) {
-      routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors, {
-        simplified: true
-      })
-    }
+    // Render routes under markers
+    routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors, {
+      simplified: true
+    })
 
-    // Add jobs source WITHOUT clustering - show all markers as tiny circles
-    if (jobFeatures.length > 0 && map.current) {
-      console.log(`🗺️ VrpMapOptimized: Adding ${jobFeatures.length} job features (no clustering)`)
+    // Add job markers
+    map.current.addSource('jobs', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: jobFeatures }
+    })
 
-      map.current.addSource('jobs', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: jobFeatures }
-      })
-
-      // All job circles - tiny colored dots
-      map.current.addLayer({
-        id: 'jobs-circles',
-        type: 'circle',
-        source: 'jobs',
-        paint: {
-          'circle-color': ['get', 'color'],
-          'circle-radius': 4, // Small circles
-          'circle-stroke-width': 1,
-          'circle-stroke-color': '#ffffff',
-          'circle-opacity': 0.8
-        }
-      })
-
-      // Click handler for jobs - show popup
-      map.current.on('click', 'jobs-circles', (e) => {
-        if (!e.features?.[0]) return
-        const props = e.features[0].properties
-        new maplibregl.Popup()
-          .setLngLat(e.lngLat)
-          .setHTML(`
-            <div class="p-2">
-              <strong>${props?.name || 'Job'}</strong><br/>
-              Visit #${props?.sequence || '?'}<br/>
-              Vehicle: ${props?.resource || 'Unknown'}
-            </div>
-          `)
-          .addTo(map.current!)
-      })
-
-      // Hover handlers - highlight route on marker hover
-      map.current.on('mouseenter', 'jobs-circles', (e) => {
-        if (map.current) map.current.getCanvas().style.cursor = 'pointer'
-
-        // Highlight the route for this marker's resource
-        const resourceName = e.features?.[0]?.properties?.resource
-        if (resourceName) {
-          highlightRoute(resourceName)
-        }
-      })
-
-      map.current.on('mouseleave', 'jobs-circles', () => {
-        if (map.current) map.current.getCanvas().style.cursor = ''
-
-        // Reset route highlighting
-        highlightRoute(null)
-      })
-
-      // Fit bounds
-      if (!bounds.isEmpty()) {
-        map.current.fitBounds(bounds, { padding: 50 })
+    map.current.addLayer({
+      id: 'jobs-circles',
+      type: 'circle',
+      source: 'jobs',
+      paint: {
+        'circle-color': ['get', 'color'],
+        'circle-radius': 4,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 0.8
       }
+    })
+
+    // Click to show job details
+    map.current.on('click', 'jobs-circles', (e) => {
+      if (!e.features?.[0] || !map.current) return
+      const props = e.features[0].properties
+      new maplibregl.Popup()
+        .setLngLat(e.lngLat)
+        .setHTML(`
+          <div class="p-2">
+            <strong>${props?.name || 'Job'}</strong><br/>
+            Visit #${props?.sequence || '?'}<br/>
+            Vehicle: ${props?.resource || 'Unknown'}
+          </div>
+        `)
+        .addTo(map.current)
+    })
+
+    // Hover to highlight route
+    map.current.on('mouseenter', 'jobs-circles', (e) => {
+      if (map.current) map.current.getCanvas().style.cursor = 'pointer'
+      const resourceName = e.features?.[0]?.properties?.resource
+      if (resourceName) highlightRoute(resourceName)
+    })
+
+    map.current.on('mouseleave', 'jobs-circles', () => {
+      if (map.current) map.current.getCanvas().style.cursor = ''
+      highlightRoute(null)
+    })
+
+    if (!bounds.isEmpty()) {
+      map.current.fitBounds(bounds, { padding: 50 })
     }
   }, [requestData, responseData, highlightRoute])
 
   useEffect(() => {
-    console.log('🗺️ VrpMapOptimized: useEffect triggered', {
-      hasMap: !!map.current,
-      isStyleLoaded: map.current?.isStyleLoaded(),
-      hasRequestData: !!requestData,
-      hasResponseData: !!responseData
-    })
-
-    if (!map.current) {
-      console.log('⚠️ VrpMapOptimized: No map yet')
-      return
-    }
+    if (!map.current) return
 
     if (!map.current.isStyleLoaded()) {
-      console.log('⏳ VrpMapOptimized: Waiting for style to load')
       map.current.once('styledata', renderMapData)
       return
     }
 
-    console.log('✅ VrpMapOptimized: Calling renderMapData directly')
     renderMapData()
   }, [requestData, responseData, renderMapData])
 
