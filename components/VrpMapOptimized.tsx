@@ -87,7 +87,13 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
     const jobFeatures: GeoJSON.Feature[] = []
     const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
 
-    responseData.trips?.forEach((trip) => {
+    console.log('🗺️ VrpMapOptimized: Building job features', {
+      hasResponseData: !!responseData,
+      tripsCount: responseData.trips?.length,
+      jobsCount: jobs?.length
+    })
+
+    responseData.trips?.forEach((trip, tripIdx) => {
       const color = resourceColors.get(trip.resource || '') || '#3B82F6'
 
       trip.visits?.forEach((visit, idx) => {
@@ -111,8 +117,19 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
       })
     })
 
+    console.log(`🗺️ VrpMapOptimized: Built ${jobFeatures.length} job features`)
+
+    // Render routes FIRST (so they appear under markers)
+    if (responseData) {
+      routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors, {
+        simplified: true
+      })
+    }
+
     // Add jobs source with clustering enabled
     if (jobFeatures.length > 0 && map.current) {
+      console.log(`🗺️ VrpMapOptimized: Adding ${jobFeatures.length} job features`)
+
       map.current.addSource('jobs', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: jobFeatures },
@@ -235,11 +252,6 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
       if (!bounds.isEmpty()) {
         map.current.fitBounds(bounds, { padding: 50 })
       }
-
-      // Render routes with simplified styling for large datasets
-      routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors, {
-        simplified: true
-      })
     }
   }, [requestData, responseData])
 
