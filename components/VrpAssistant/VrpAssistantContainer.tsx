@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VrpAssistantPane } from './VrpAssistantPane'
 import { useVrpAssistant } from './VrpAssistantContext'
+import { useMobileDetection } from '@/lib/hooks/useMobileDetection'
+import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcut'
 
 export function VrpAssistantContainer() {
   const { messages, isOpen, chatMode, toggleAssistant, closeAssistant } = useVrpAssistant()
-  const [isMobile, setIsMobile] = useState(false)
+  const isMobile = useMobileDetection()
   const [isClient, setIsClient] = useState(false)
 
   // Hydration fix: only show notification badge after client-side hydration
@@ -18,40 +20,19 @@ export function VrpAssistantContainer() {
     setIsClient(true)
   }, [])
 
-  // Check mobile viewport
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.matchMedia('(max-width: 768px)').matches)
-    }
-
-    checkIsMobile()
-    const mediaQuery = window.matchMedia('(max-width: 768px)')
-    mediaQuery.addEventListener('change', checkIsMobile)
-
-    return () => {
-      mediaQuery.removeEventListener('change', checkIsMobile)
-    }
-  }, [])
-
   // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Ctrl/Cmd + K to toggle assistant
-      if ((event.ctrlKey || event.metaKey) && event.key === 'k' && !event.shiftKey) {
-        event.preventDefault()
-        toggleAssistant()
-      }
-      // Escape to close when open
-      if (event.key === 'Escape' && isOpen) {
-        closeAssistant()
-      }
+  useKeyboardShortcuts([
+    {
+      config: { key: 'k', ctrlOrCmd: true, preventDefault: true },
+      callback: toggleAssistant,
+      deps: [toggleAssistant]
+    },
+    {
+      config: { key: 'Escape', enabled: isOpen },
+      callback: closeAssistant,
+      deps: [closeAssistant, isOpen]
     }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, toggleAssistant, closeAssistant])
+  ])
 
   // Check if there are any messages (for notification badge) - only after hydration
   const hasMessages = isClient && messages.length > 0
