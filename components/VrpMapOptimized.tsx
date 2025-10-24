@@ -72,7 +72,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
     routeRenderer.current?.clear()
 
     // Remove existing layers and sources
-    const layersToRemove = ['jobs-circles', 'clusters', 'resources-circles']
+    const layersToRemove = ['jobs-circles', 'resources-circles']
     layersToRemove.forEach(id => {
       if (map.current?.getLayer(id)) {
         map.current.removeLayer(id)
@@ -134,66 +134,30 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
       })
     }
 
-    // Add jobs source with clustering enabled
+    // Add jobs source WITHOUT clustering - show all markers as tiny circles
     if (jobFeatures.length > 0 && map.current) {
-      console.log(`🗺️ VrpMapOptimized: Adding ${jobFeatures.length} job features`)
+      console.log(`🗺️ VrpMapOptimized: Adding ${jobFeatures.length} job features (no clustering)`)
 
       map.current.addSource('jobs', {
         type: 'geojson',
-        data: { type: 'FeatureCollection', features: jobFeatures },
-        cluster: true,
-        clusterMaxZoom: 14, // Max zoom to cluster points on
-        clusterRadius: 50 // Radius of each cluster when clustering points
+        data: { type: 'FeatureCollection', features: jobFeatures }
       })
 
-      // Cluster circles layer
-      map.current.addLayer({
-        id: 'clusters',
-        type: 'circle',
-        source: 'jobs',
-        filter: ['has', 'point_count'],
-        paint: {
-          'circle-color': [
-            'step',
-            ['get', 'point_count'],
-            '#51bbd6',
-            100,
-            '#f1f075',
-            750,
-            '#f28cb1'
-          ],
-          'circle-radius': [
-            'step',
-            ['get', 'point_count'],
-            20,
-            100,
-            30,
-            750,
-            40
-          ],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff'
-        }
-      })
-
-      // Cluster count labels removed - font loading was causing errors
-      // Click clusters to zoom in instead
-
-      // Individual unclustered job circles (no sequence numbers - too expensive)
+      // All job circles - tiny colored dots
       map.current.addLayer({
         id: 'jobs-circles',
         type: 'circle',
         source: 'jobs',
-        filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-color': ['get', 'color'],
-          'circle-radius': 8,
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff'
+          'circle-radius': 4, // Small circles
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.8
         }
       })
 
-      // Click handler for individual jobs - show popup
+      // Click handler for jobs - show popup
       map.current.on('click', 'jobs-circles', (e) => {
         if (!e.features?.[0]) return
         const props = e.features[0].properties
@@ -209,37 +173,11 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
           .addTo(map.current!)
       })
 
-      // Click handler for clusters - zoom in
-      map.current.on('click', 'clusters', (e) => {
-        if (!e.features?.[0] || !map.current) return
-        const features = map.current.queryRenderedFeatures(e.point, {
-          layers: ['clusters']
-        })
-        const clusterId = features[0]?.properties?.cluster_id
-        const source = map.current.getSource('jobs') as maplibregl.GeoJSONSource
-
-        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-          if (err || !map.current) return
-          map.current.easeTo({
-            center: (features[0].geometry as GeoJSON.Point).coordinates as [number, number],
-            zoom: zoom
-          })
-        })
-      })
-
-      // Cursor pointer on hover - jobs
+      // Cursor pointer on hover
       map.current.on('mouseenter', 'jobs-circles', () => {
         if (map.current) map.current.getCanvas().style.cursor = 'pointer'
       })
       map.current.on('mouseleave', 'jobs-circles', () => {
-        if (map.current) map.current.getCanvas().style.cursor = ''
-      })
-
-      // Cursor pointer on hover - clusters
-      map.current.on('mouseenter', 'clusters', () => {
-        if (map.current) map.current.getCanvas().style.cursor = 'pointer'
-      })
-      map.current.on('mouseleave', 'clusters', () => {
         if (map.current) map.current.getCanvas().style.cursor = ''
       })
 
@@ -284,7 +222,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
       )}
 
       <div className="absolute bottom-4 right-4 bg-blue-600 text-white text-xs px-2 py-1 rounded shadow">
-        Optimized (circle layers)
+        Optimized (GPU-rendered)
       </div>
     </div>
   )
