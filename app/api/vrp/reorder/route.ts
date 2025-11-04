@@ -122,7 +122,7 @@ function extractFeasibilityWarnings(solution: Vrp.OnRouteResponse): string[] {
   });
 
   // Check for unassigned jobs
-  const solutionAny = solution as Record<string, unknown>;
+  const solutionAny = solution as unknown as Record<string, unknown>;
   const unassigned = (solutionAny.unassigned as unknown[]) || [];
   if (unassigned.length > 0) {
     warnings.push(`${unassigned.length} unassigned jobs`);

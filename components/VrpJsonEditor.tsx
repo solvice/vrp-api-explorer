@@ -747,7 +747,6 @@ function VrpJsonEditorContent({
                   localityBonus: false,
                   shareSuggestSelections: false,
                   showInlineDetails: true,
-                  showMethods: false,
                 },
                 contextmenu: true,
                 selectOnLineNumbers: true,
