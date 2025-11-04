@@ -7,14 +7,7 @@ import type { editor } from "monaco-editor";
 import type * as Monaco from "monaco-editor";
 import { Vrp } from "solvice-vrp-solver/resources/vrp/vrp";
 import { validateVrpRequest, ValidationResult } from "@/lib/vrp-schema";
-import {
-  CheckCircle,
-  XCircle,
-  Loader2,
-  Play,
-  Settings,
-  ExternalLink,
-} from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Play, Settings } from "lucide-react";
 import { useVrpAssistant } from "@/components/VrpAssistant/VrpAssistantContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
