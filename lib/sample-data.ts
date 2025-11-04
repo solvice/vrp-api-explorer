@@ -316,7 +316,7 @@ function getFieldServiceData(): Vrp.VrpSyncSolveParams {
 
     jobs.push({
       name: `${service.type}_${String(i).padStart(2, "0")}`,
-      duration: 3600 + Math.floor(Math.random() * 7200), // 1-3 hours
+      duration: 1800 + Math.floor(Math.random() * 5400), // 30 minutes - 2 hours
       location: {
         latitude: 51.0 + (Math.random() - 0.5) * 0.4, // Larger service area
         longitude: 3.72 + (Math.random() - 0.5) * 0.3,

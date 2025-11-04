@@ -1,0 +1,1169 @@
+{
+  "type": "object",
+  "properties": {
+    "jobs": {
+      "description": "Body param: List of jobs/tasks to be assigned to resources. Each job specifies\nservice requirements, location, time constraints, duration, and resource\npreferences. Jobs represent the work that needs to be scheduled and optimized.\nAt least one job is required, with a maximum of 10,000 jobs per request.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Job"
+      },
+      "title": "jobs: array"
+    },
+    "resources": {
+      "description": "Body param: List of available resources (vehicles, drivers, workers) that can be\nassigned to perform jobs. Each resource defines their working schedules,\nlocation constraints, capacity limits, and capabilities. At least one resource\nis required, with a maximum of 2000 resources per request.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Resource"
+      },
+      "title": "resources: array"
+    },
+    "millis": {
+      "description": "Query param:",
+      "type": [
+        "null",
+        "string"
+      ],
+      "title": "millis: string?"
+    },
+    "hook": {
+      "description": "Body param: Optional webhook URL that will receive a POST request with the job\nID when the optimization is complete. This enables asynchronous processing where\nyou can submit a request and be notified when results are ready, rather than\nwaiting for the synchronous response.",
+      "type": [
+        "null",
+        "string"
+      ],
+      "title": "hook: string?"
+    },
+    "label": {
+      "description": "Body param:",
+      "type": [
+        "null",
+        "string"
+      ],
+      "title": "label: string?"
+    },
+    "options": {
+      "description": "Body param: Options to tweak the routing engine",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Options"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "options: object?"
+    },
+    "relations": {
+      "description": "Body param:",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Relation"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "relations: array?"
+    },
+    "weights": {
+      "description": "Body param: OnRoute Weights",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Weights"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "weights: object?"
+    }
+  },
+  "required": [
+    "jobs",
+    "resources"
+  ],
+  "definitions": {
+    "Job": {
+      "description": "A job to be performed by a resource.",
+      "title": "Job",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Unique description",
+          "type": "string",
+          "title": "name: string"
+        },
+        "allowedResources": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "allowedResources: array?"
+        },
+        "complexity": {
+          "description": "Complexity of the job",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "complexity: number?"
+        },
+        "disallowedResources": {
+          "description": "List of vehicle names that are allowed to be assigned to this order.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "disallowedResources: array?"
+        },
+        "duration": {
+          "description": "Service duration of the job",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "duration: number?"
+        },
+        "durationSquash": {
+          "description": "Reduced service duration when this job is performed at the same location\nimmediately after another job. This optimization recognizes that setup time,\ntravel within a building, or equipment preparation may be shared between\nconsecutive jobs at the same location. For example, if duration=600 and\ndurationSquash=30, the second job at the same location takes only 30 seconds\ninstead of 600.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "durationSquash: number?"
+        },
+        "hard": {
+          "description": "In the case of partialPlanning planning, this indicates whether this order\nshould be integrated into the planning or not.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "hard: boolean?"
+        },
+        "hardWeight": {
+          "description": "In the case of partialPlanning planning, this indicates the weight of this\norder.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "hardWeight: number?"
+        },
+        "initialArrival": {
+          "description": "Warm start for the arrival time. Use this to speed up the solver and to start\nfrom an initial solution.",
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "initialArrival: string?"
+        },
+        "initialResource": {
+          "description": "Warm start for the assigned resource: name of the vehicle to which this job is\nplanned. Use this to speed up the solver and to start from an initial solution.",
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "initialResource: string?"
+        },
+        "load": {
+          "description": "Load",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "load: array?"
+        },
+        "location": {
+          "description": "Geographical Location in WGS-84",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Location"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "location: object?"
+        },
+        "padding": {
+          "description": "Padding time before and after the job. In seconds",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "padding: number?"
+        },
+        "plannedArrival": {
+          "description": "Fixed arrival time for this job that creates a soft constraint during\noptimization. The solver will try to schedule the job as close as possible to\nthis time, with deviations penalized in the score according to the\nplannedWeight. This allows for customer appointment times or preferred\nscheduling while maintaining optimization flexibility.",
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "plannedArrival: string?"
+        },
+        "plannedDate": {
+          "description": "Fixed date assignment for this job that must be respected during optimization.\nWhen specified, the job can only be scheduled on this specific date, creating a\nhard constraint that the solver must honor. Useful for jobs that are already\ncommitted to customers or have date-specific requirements.",
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "plannedDate: string?"
+        },
+        "plannedResource": {
+          "description": "Fixed resource assignment for this job that must be respected during\noptimization. When specified, only the named resource can be assigned to this\njob, creating a hard constraint. Combined with plannedArrival, this allows for\npre-committed assignments that the solver must work around when optimizing other\njobs.",
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "plannedResource: string?"
+        },
+        "priority": {
+          "description": "Priority level that influences job selection during optimization. Higher\npriority jobs are more likely to be included in the final solution when not all\njobs can be assigned due to resource or time constraints. The priority is\nmultiplied by job duration to calculate the selection weight. Particularly\nimportant when partialPlanning is enabled. Default value is 1.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "priority: number?"
+        },
+        "rankings": {
+          "description": "List of resource preference rankings for this job. Each ranking specifies a\nresource name and a preference score (1-100), where lower values indicate\nstronger preference. This allows jobs to have preferred resources while still\nallowing assignment to other resources if needed, with the preference reflected\nin the optimization score.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Job.Ranking"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "rankings: array?"
+        },
+        "resumable": {
+          "description": "Enables job interruption by resource unavailability breaks. When true, the job\ncan start before a break, pause during the break, and resume afterward. Default:\nfalse.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "resumable: boolean?"
+        },
+        "tags": {
+          "description": "List of skill or capability tags that define resource requirements for this job.\nTags create hard or soft constraints linking jobs to resources with matching\ncapabilities. For example, a 'plumbing' tag ensures only resources with plumbing\nskills can be assigned to plumbing jobs.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Job.Tag"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "tags: array?"
+        },
+        "urgency": {
+          "description": "Urgency level that influences the scheduling order of jobs. Higher urgency jobs\nare preferentially scheduled earlier in the day and earlier in the planning\nperiod, helping ensure time-critical tasks are completed first. This affects the\nsequence of job execution rather than job selection.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "urgency: number?"
+        },
+        "windows": {
+          "description": "List of time windows during which this job can be started or executed. Each\nwindow defines a start and end time, creating temporal constraints for job\nscheduling. Multiple windows allow for flexible scheduling across different time\nperiods. Jobs can only be assigned within these time boundaries.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Window"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "windows: array?"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "Location": {
+      "description": "Geographical Location in WGS-84",
+      "title": "Location",
+      "type": "object",
+      "properties": {
+        "latitude": {
+          "description": "Latitude",
+          "type": "number",
+          "title": "latitude: number"
+        },
+        "longitude": {
+          "description": "Longitude",
+          "type": "number",
+          "title": "longitude: number"
+        }
+      }
+    },
+    "Job.Ranking": {
+      "description": "A ranking is a measure of the affinity of a `Resource` towards a `Job`.",
+      "title": "Job.Ranking",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Name of the resource being ranked for this job. Must exactly match a resource\nname defined in the request's resources list. This creates a preference\nrelationship between the job and the specified resource.",
+          "type": "string",
+          "title": "name: string"
+        },
+        "ranking": {
+          "description": "Preference ranking score for this resource (1-100). Lower values indicate\nstronger preference - rank 1 is most preferred, rank 100 is least preferred. The\nsolver will try to assign jobs to higher-ranked (lower-numbered) resources when\npossible, with the preference strength controlled by the rankingWeight in the\nweights configuration.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "ranking: number?"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "Job.Tag": {
+      "description": "A tag is a match between a `Job` and a `Resource`.",
+      "title": "Job.Tag",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Tag name that defines a skill, capability, or requirement. This creates a\nmatching constraint between jobs and resources - only resources with this tag\ncan be assigned to jobs that require it. Common examples include 'plumbing',\n'electrical', 'certified-technician', or 'heavy-lifting'.",
+          "type": "string",
+          "title": "name: string"
+        },
+        "hard": {
+          "description": "Constraint type for this tag requirement. When true (default), creates a hard\nconstraint - jobs can only be assigned to resources with matching tags. When\nfalse, creates a soft constraint - jobs prefer resources with matching tags but\ncan be assigned to others if needed, with a score penalty.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "hard: boolean?"
+        },
+        "weight": {
+          "description": "Penalty weight applied when this tag constraint is violated (soft constraints\nonly). The weight is measured in the same units as travel time - a weight of\n3600 means violating this tag constraint is equivalent to 1 hour of additional\ntravel time. Higher weights make the constraint more important.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "weight: number?"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "Window": {
+      "description": "Window in which the job can be executed",
+      "title": "Window",
+      "type": "object",
+      "properties": {
+        "from": {
+          "description": "Date time start of window",
+          "type": "string",
+          "title": "from: string"
+        },
+        "to": {
+          "description": "Date time end of window",
+          "type": "string",
+          "title": "to: string"
+        },
+        "hard": {
+          "description": "Hard constraint violation of DateWindow",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "hard: boolean?"
+        },
+        "weight": {
+          "description": "Weight constraint modifier",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "weight: number?"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "Resource": {
+      "description": "Resource (vehicle, employee)",
+      "title": "Resource",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Unique identifier for this resource. Used to reference the resource in job\nassignments, relations, and results. Must be unique within the request.",
+          "type": "string",
+          "title": "name: string"
+        },
+        "shifts": {
+          "description": "List of work shifts defining when this resource is available for job\nassignments. Each shift specifies working hours, start/end locations, breaks,\nand other constraints. Multiple shifts allow for multi-day planning or\nsplit-shift schedules. At least one shift is required.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Shift"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "shifts: array?"
+        },
+        "capacity": {
+          "description": "Multi-dimensional capacity limits for this resource, such as weight, volume, or\nitem count. Each dimension corresponds to job load requirements. For example,\n[500, 200] might represent 500 kg weight capacity and 200 cubic meters volume\ncapacity. Maximum 5 dimensions supported.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "capacity: array?"
+        },
+        "category": {
+          "description": "Transportation type for the resource",
+          "anyOf": [
+            {
+              "enum": [
+                "BIKE",
+                "CAR",
+                "TRUCK"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "category: string?"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Location"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "end: object?"
+        },
+        "hourlyCost": {
+          "description": "Hourly cost rate for this resource in your currency units. Used to calculate\ntotal labor costs for solutions. Only counts active time (driving, servicing, or\nwaiting), not idle time. This enables cost-based optimization and financial\nanalysis of routing solutions.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "hourlyCost: number?"
+        },
+        "maxDriveTime": {
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "maxDriveTime: number?"
+        },
+        "maxDriveTimeInSeconds": {
+          "description": "Maximum total driving time allowed for this resource per shift or planning\nperiod. This constraint prevents excessive driving and ensures compliance with\nregulations or operational policies. Measured in seconds and includes all travel\nbetween jobs but excludes service time.",
+          "title": "maxDriveTimeInSeconds"
+        },
+        "maxDriveTimeJob": {
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "maxDriveTimeJob: number?"
+        },
+        "region": {
+          "description": "Geographical Location in WGS-84",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Location"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "region: object?"
+        },
+        "rules": {
+          "description": "List of periodic constraints that apply to this resource over specified time\nperiods. Rules can enforce minimum/maximum work time, service time, drive time,\nor job complexity limits. These constraints ensure compliance with labor\nregulations, operational policies, or capacity limitations.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Rule"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "rules: array?"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Location"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "start: object?"
+        },
+        "tags": {
+          "description": "List of capability tags that define what types of jobs this resource can\nperform. Tags create matching constraints between jobs and resources - only\nresources with matching tags can be assigned to jobs that require those\ncapabilities. For example, 'plumbing' or 'electrical' tags.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "tags: array?"
+        }
+      },
+      "required": [
+        "name",
+        "shifts"
+      ]
+    },
+    "Shift": {
+      "description": "Shift definition. Every potential shift of a resource should be defined here.\nEvery shift can be a trip.",
+      "title": "Shift",
+      "type": "object",
+      "properties": {
+        "from": {
+          "description": "Start of the shift datetime",
+          "type": "string",
+          "title": "from: string"
+        },
+        "to": {
+          "description": "End of the shift datetime",
+          "type": "string",
+          "title": "to: string"
+        },
+        "breaks": {
+          "description": "Windowed breaks definitions.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Shift.Break"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "breaks: array?"
+        },
+        "end": {
+          "description": "Geographical Location in WGS-84",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Location"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "end: object?"
+        },
+        "ignoreTravelTimeFromLastJob": {
+          "description": "Ignore the travel time from the last order to the optional end location",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "ignoreTravelTimeFromLastJob: boolean?"
+        },
+        "ignoreTravelTimeToFirstJob": {
+          "description": "Ignore the travel time from the start location to the first order",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "ignoreTravelTimeToFirstJob: boolean?"
+        },
+        "overtime": {
+          "title": "overtime"
+        },
+        "overtimeEnd": {
+          "description": "Maximum overtime time.",
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "overtimeEnd: string?"
+        },
+        "start": {
+          "description": "Geographical Location in WGS-84",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Location"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "start: object?"
+        },
+        "tags": {
+          "description": "Shift tags will ensure that this resource can only do Jobs of this tag during\nthis shift. This allows for tag based availability.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "tags: array?"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "Shift.Break": {
+      "title": "Shift.Break",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "Type of break that can be defined for a resource",
+          "enum": [
+            "DRIVE",
+            "UNAVAILABILITY",
+            "WINDOWED"
+          ],
+          "type": "string",
+          "title": "type: string"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "Rule": {
+      "description": "Periodic time rule for a resource",
+      "title": "Rule",
+      "type": "object",
+      "properties": {
+        "maxDriveTime": {
+          "description": "Maximum drive time in seconds",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "maxDriveTime: number?"
+        },
+        "maxJobComplexity": {
+          "description": "Sum of the complexity of the jobs completed by this resource should not go over\nthis value",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "maxJobComplexity: number?"
+        },
+        "maxServiceTime": {
+          "description": "Maximum service time in seconds",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "maxServiceTime: number?"
+        },
+        "maxWorkTime": {
+          "description": "Maximum work time in seconds. Work time is service time + drive/travel time.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "maxWorkTime: number?"
+        },
+        "minDriveTime": {
+          "description": "Minimum drive time in seconds",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "minDriveTime: number?"
+        },
+        "minJobComplexity": {
+          "description": "Sum of the complexity of the jobs completed by this resource should reach this\nvalue",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "minJobComplexity: number?"
+        },
+        "minServiceTime": {
+          "description": "Minimum service time in seconds",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "minServiceTime: number?"
+        },
+        "minWorkTime": {
+          "description": "Minimum work time in seconds. Work time is service time + drive/travel time.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "minWorkTime: number?"
+        },
+        "period": {
+          "description": "Subset of the planning period",
+          "$ref": "#/definitions/Period",
+          "title": "period: object"
+        }
+      }
+    },
+    "Period": {
+      "description": "Subset of the planning period",
+      "title": "Period",
+      "type": "object",
+      "properties": {
+        "end": {
+          "description": "End date-time",
+          "title": "end"
+        },
+        "from": {
+          "description": "Start date-time",
+          "type": "string",
+          "title": "from: string"
+        },
+        "to": {
+          "type": "string",
+          "title": "to: string"
+        }
+      },
+      "required": [
+        "end",
+        "from",
+        "to"
+      ]
+    },
+    "Options": {
+      "description": "Options to tweak the routing engine",
+      "title": "Options",
+      "type": "object",
+      "properties": {
+        "euclidian": {
+          "description": "Use euclidean distance calculations for travel time and distance instead of real\nroad networks. When true, straight-line distances are used which is faster but\nless accurate. When false (default), routing engines like OSM, TomTom, or Google\nprovide real road distances and travel times.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "euclidian: boolean?"
+        },
+        "explanation": {
+          "description": "Options to manage the explanation of the solution",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExplanationOptions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "explanation: object?"
+        },
+        "fairComplexityPerResource": {
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "fairComplexityPerResource: boolean?"
+        },
+        "fairComplexityPerTrip": {
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "fairComplexityPerTrip: boolean?"
+        },
+        "fairWorkloadPerResource": {
+          "description": "Enable workload balancing across different days for each individual resource.\nWhen true, the solver ensures that each resource's workload is distributed\nevenly across their available days, preventing some days from being overloaded\nwhile others are underutilized. Works in conjunction with\n`Weights.workloadSpreadWeight` and `options.workloadSensitivity`.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "fairWorkloadPerResource: boolean?"
+        },
+        "fairWorkloadPerTrip": {
+          "description": "Enable workload balancing across all resources and all days/trips. When true,\nthe solver attempts to distribute service time evenly across all resources and\ntime periods, preventing overloading of specific resources or days. The\neffectiveness is controlled by `Weights.workloadSpreadWeight` and\n`options.workloadSensitivity`.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "fairWorkloadPerTrip: boolean?"
+        },
+        "maxSuggestions": {
+          "description": "Maximum number of alternative assignment suggestions to return when using the\nsuggestion endpoint. The solver generates multiple assignment options for\nunassigned jobs, ranked by quality. A value of 0 (default) returns all possible\nsuggestions, while values 1-5 limit the results to the best alternatives. Higher\nvalues increase response time but provide more options.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "maxSuggestions: number?"
+        },
+        "minimizeResources": {
+          "description": "Primary optimization objective. When true, the solver prioritizes using fewer\nresources (vehicles/drivers) even if it increases total travel time. When false,\nthe solver prioritizes minimizing total travel time even if it requires more\nresources. This fundamentally changes the optimization strategy.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "minimizeResources: boolean?"
+        },
+        "onlyFeasibleSuggestions": {
+          "description": "Filter suggestions based on feasibility. When true (default), only suggestions\nthat don't violate hard constraints are returned if the initial plan is\nfeasible. If the initial plan is infeasible, only suggestions that don't worsen\nthe infeasibility are returned. When false, all suggestions are returned\nregardless of feasibility, which may include constraint violations.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "onlyFeasibleSuggestions: boolean?"
+        },
+        "partialPlanning": {
+          "description": "Allow the solver to create solutions where not all jobs are assigned to\nresources. When true (default), the solver will assign as many jobs as possible\nwhile respecting constraints. When false, the solver will only accept solutions\nwhere all jobs are assigned, which may result in infeasible solutions.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "partialPlanning: boolean?"
+        },
+        "polylines": {
+          "description": "Generate detailed route polylines (encoded route geometries) for each trip\nsegment. When true, the response includes polyline data that can be used to draw\nroutes on maps. This increases processing time and response size but provides\nvisual route information for mapping applications.",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "polylines: boolean?"
+        },
+        "routingEngine": {
+          "description": "The routing engine to use for distance and travel time calculations",
+          "anyOf": [
+            {
+              "enum": [
+                "ANYMAP",
+                "GOOGLE",
+                "OSM",
+                "TOMTOM"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "routingEngine: string?"
+        },
+        "snapUnit": {
+          "description": "Time granularity in seconds for arrival time snapping. All calculated arrival\ntimes are rounded up to the nearest multiple of this value. For example, with\nsnapUnit=300 (5 minutes), an arrival time of 08:32 becomes 08:35. This helps\ncreate more practical schedules by avoiding precise timings that are difficult\nto follow in real operations. The snapping affects score calculation during\noptimization.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "snapUnit: number?"
+        },
+        "traffic": {
+          "description": "Global traffic multiplier applied to all travel times. A value of 1.1 increases\ntravel times by 10% to account for traffic congestion. For real-time traffic\ndata, use TomTom or Google routing engines. This is a simple approximation for\nscenarios where precise traffic data is unavailable.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "traffic: number?"
+        },
+        "workloadSensitivity": {
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "workloadSensitivity: number?"
+        }
+      }
+    },
+    "ExplanationOptions": {
+      "description": "Options to manage the explanation of the solution",
+      "title": "ExplanationOptions",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "When enabled the explanation will contain a map of all the alternative positions\nfor each job",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "enabled: boolean?"
+        },
+        "filterHardConstraints": {
+          "description": "When true the map of alternative positions will contain only feasible\nalternatives",
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "filterHardConstraints: boolean?"
+        },
+        "onlyUnassigned": {
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "onlyUnassigned: boolean?"
+        }
+      }
+    },
+    "Relation": {
+      "description": "Relation between two jobs.",
+      "title": "Relation",
+      "type": "object",
+      "properties": {
+        "jobs": {
+          "description": "List of job names involved in this relation. For sequence-based relations, the\norder matters - jobs will be executed in the order specified. For other\nrelations, order may be irrelevant. All job names must exist in the request's\njobs list.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "jobs: array"
+        },
+        "timeInterval": {
+          "description": "Determines if the time interval between jobs should be measured from arrival or\ndeparture",
+          "enum": [
+            "FROM_ARRIVAL",
+            "FROM_DEPARTURE"
+          ],
+          "type": "string",
+          "title": "timeInterval: string"
+        },
+        "type": {
+          "$ref": "#/definitions/RelationType",
+          "description": "Type of relation between jobs",
+          "title": "type: object"
+        },
+        "maxTimeInterval": {
+          "description": "Maximum time interval in seconds allowed between consecutive jobs in sequence\nrelations. This prevents excessive delays between related jobs and ensures\ntimely completion of job sequences. Only applies to SEQUENCE, DIRECT_SEQUENCE,\nand SAME_TIME relations.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "maxTimeInterval: number?"
+        },
+        "maxWaitingTime": {
+          "description": "Maximum waiting time in seconds between jobs in a SAME_TIME relation. This\ndefines how much time synchronization tolerance is allowed - jobs can start\nwithin this time window of each other. Defaults to 1200 seconds (20 minutes) if\nnot specified.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "maxWaitingTime: number?"
+        },
+        "minTimeInterval": {
+          "description": "Minimum time interval in seconds that must pass between consecutive jobs in\nsequence relations. This ensures adequate time for travel, setup, or processing\nbetween related jobs. Only applies to SEQUENCE, DIRECT_SEQUENCE, and SAME_TIME\nrelations.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "minTimeInterval: number?"
+        },
+        "partialPlanning": {
+          "description": "Allows the solver to include only some jobs from this relation in the final\nsolution when the full relation cannot be satisfied due to constraints. When\nfalse, either all jobs in the relation are assigned or none are, maintaining the\nrelation's integrity.",
+          "type": "boolean",
+          "title": "partialPlanning: boolean"
+        },
+        "resource": {
+          "description": "Optional resource constraint for this relation. When specified, all jobs in the\nrelation must be assigned to this specific resource. This creates a hard\nconstraint that can help enforce resource-specific workflows or capabilities.",
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "resource: string?"
+        },
+        "tags": {
+          "description": "List of tag names used to define job groups in GROUP_SEQUENCE relations. Jobs\nwith matching tags form groups that must be executed in sequence. This allows\nfor complex sequencing rules based on job characteristics rather than explicit\njob names.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "tags: array?"
+        }
+      },
+      "required": [
+        "jobs",
+        "timeInterval",
+        "type"
+      ]
+    },
+    "RelationType": {
+      "description": "Type of relation between jobs",
+      "title": "RelationType",
+      "enum": [
+        "DIRECT_SEQUENCE",
+        "GROUP_SEQUENCE",
+        "NEIGHBOR",
+        "PICKUP_AND_DELIVERY",
+        "SAME_DAY",
+        "SAME_RESOURCE",
+        "SAME_TIME",
+        "SAME_TRIP",
+        "SEQUENCE"
+      ],
+      "type": "string"
+    },
+    "Weights": {
+      "description": "OnRoute Weights",
+      "title": "Weights",
+      "type": "object",
+      "properties": {
+        "allowedResourcesWeight": {
+          "description": "Weight modifier for soft violations of resource assignment constraints. When\njobs have allowedResources restrictions and they cannot be satisfied as hard\nconstraints, this weight determines the penalty for assigning jobs to\nnon-allowed resources.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "allowedResourcesWeight: number?"
+        },
+        "asapWeight": {
+          "description": "Weight modifier for scheduling jobs as early as possible within their time\nwindows and resource availability. Higher values push jobs toward the beginning\nof shifts and planning periods, useful for front-loading work or maximizing\ncompletion rates.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "asapWeight: number?"
+        },
+        "driveTimeWeight": {
+          "description": "Weight modifier for total driving time across all resources. Similar to\ntravelTimeWeight but focuses specifically on driving time violations or\nconstraints. Higher values make the solver more concerned with minimizing\ndriving time, useful for fuel efficiency or driver fatigue management.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "driveTimeWeight: number?"
+        },
+        "minimizeResourcesWeight": {
+          "description": "Weight modifier for minimizing the number of active resources per day/trip. The\nweight is measured in the same units as travel time - a weight of 3600 means\nusing an additional resource is equivalent to 1 hour of travel time. Higher\nvalues encourage consolidation of jobs onto fewer resources.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "minimizeResourcesWeight: number?"
+        },
+        "plannedWeight": {
+          "description": "Weight modifier for deviations from planned arrivals and resource assignments.\nHigher values make the solver more reluctant to deviate from plannedArrival\ntimes and plannedResource assignments. This is crucial for maintaining customer\nappointments and commitments.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "plannedWeight: number?"
+        },
+        "priorityWeight": {
+          "description": "Weight modifier for job priority constraints. Higher values make the solver more\nlikely to include high-priority jobs in the solution when not all jobs can be\nassigned. This affects job selection probability but not scheduling order. The\nweight is multiplied by the job's priority value and duration.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "priorityWeight: number?"
+        },
+        "rankingWeight": {
+          "description": "Weight modifier for resource ranking preferences defined in job rankings. Higher\nvalues make the solver more aggressive about assigning jobs to their preferred\n(lower-ranked) resources, even if it increases travel time or other costs. This\nhelps maintain service quality by using optimal resource assignments.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "rankingWeight: number?"
+        },
+        "travelTimeWeight": {
+          "description": "Weight modifier for total travel time optimization. This is the baseline weight\n(typically 1) against which all other weights are compared. Higher values make\nthe solver more aggressive about minimizing travel time, potentially at the\nexpense of other objectives.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "travelTimeWeight: number?"
+        },
+        "urgencyWeight": {
+          "description": "Weight modifier for job urgency constraints. Higher values make the solver more\naggressive about scheduling urgent jobs earlier in the day and planning period.\nThis affects the sequence and timing of job execution based on their urgency\nvalues.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "urgencyWeight: number?"
+        },
+        "waitTimeWeight": {
+          "description": "Weight modifier for total waiting time across all resources. Waiting time occurs\nwhen resources arrive at jobs before their time windows open or when they have\nidle time between jobs. Higher values make the solver more aggressive about\nminimizing idle time.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "waitTimeWeight: number?"
+        },
+        "workloadSpreadWeight": {
+          "description": "Weight modifier for workload balancing across resources and time periods. Higher\nvalues make the solver more aggressive about equalizing service time\ndistribution. Works with fairWorkloadPerTrip and fairWorkloadPerResource\noptions, and is sensitive to the workloadSensitivity parameter.",
+          "type": [
+            "null",
+            "number"
+          ],
+          "title": "workloadSpreadWeight: number?"
+        }
+      }
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VRP Solve Request",
+  "description": "Vehicle Routing Problem solve request parameters for the Solvice VRP API"
+}
