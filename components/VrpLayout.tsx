@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, ReactNode } from 'react'
+import { ReactNode } from 'react'
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useMobileDetection } from '@/lib/hooks/useMobileDetection'
 
 interface VrpLayoutProps {
   leftPanel: ReactNode
@@ -23,25 +24,8 @@ export function VrpLayout({
   kpiBar,
   leftPanelSize = 50
 }: VrpLayoutProps) {
-  const [isMobile, setIsMobile] = useState(false)
+  const isMobile = useMobileDetection()
   const centerPanelSize = 100 - leftPanelSize
-
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.matchMedia('(max-width: 768px)').matches)
-    }
-
-    // Check on mount
-    checkIsMobile()
-
-    // Listen for viewport changes
-    const mediaQuery = window.matchMedia('(max-width: 768px)')
-    mediaQuery.addEventListener('change', checkIsMobile)
-
-    return () => {
-      mediaQuery.removeEventListener('change', checkIsMobile)
-    }
-  }, [])
 
   if (isMobile) {
     return (

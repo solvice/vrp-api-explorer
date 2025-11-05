@@ -1,11 +1,12 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { Message, ExecutionMetadata } from '@/components/ui/chat-message'
 import { OpenAIService, type CsvToVrpResponse } from '@/lib/openai-service'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { ErrorHandlingService, type VrpError } from '@/lib/error-handling-service'
 import { useVrpMessages } from '@/lib/hooks/useVrpMessages'
+import { useKeyboardShortcut } from '@/lib/hooks/useKeyboardShortcut'
 
 export type ChatMode = 'modify' | 'analyze' | 'convert'
 
@@ -368,20 +369,18 @@ export function VrpAssistantProvider({ children }: VrpAssistantProviderProps) {
   }, [])
 
   // Keyboard shortcut for mode switching (Shift+Tab)
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.shiftKey && event.key === 'Tab' && isOpen) {
-        event.preventDefault()
-        const modes: ChatMode[] = ['modify', 'analyze', 'convert']
-        const currentIndex = modes.indexOf(chatMode)
-        const nextIndex = (currentIndex + 1) % modes.length
-        setChatMode(modes[nextIndex])
-      }
-    }
+  const switchChatMode = useCallback(() => {
+    const modes: ChatMode[] = ['modify', 'analyze', 'convert']
+    const currentIndex = modes.indexOf(chatMode)
+    const nextIndex = (currentIndex + 1) % modes.length
+    setChatMode(modes[nextIndex])
+  }, [chatMode, setChatMode])
 
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [chatMode, isOpen, setChatMode])
+  useKeyboardShortcut(
+    { key: 'Tab', shift: true, preventDefault: true, enabled: isOpen },
+    switchChatMode,
+    [switchChatMode, isOpen]
+  )
 
   const value: VrpAssistantContextType = {
     isProcessing,
