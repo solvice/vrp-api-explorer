@@ -10,6 +10,7 @@ interface VrpMapAdaptiveProps {
   className?: string
   highlightedJob?: { resource: string; job: string } | null
   onJobHover?: (job: { resource: string; job: string } | null) => void
+  selectedDate?: string | null
 }
 
 /**

@@ -29,6 +29,8 @@ interface VrpGanttProps {
   onJobHover?: (job: { resource: string; job: string } | null) => void
   onJobReorder?: (event: JobReorderEvent) => void
   isReordering?: boolean
+  selectedDateIndex?: number
+  onDateChange?: (dateIndex: number) => void
 }
 
 export function VrpGantt({
@@ -37,7 +39,9 @@ export function VrpGantt({
   highlightedJob,
   onJobHover,
   onJobReorder,
-  isReordering = false
+  isReordering = false,
+  selectedDateIndex: externalSelectedDateIndex,
+  onDateChange
 }: VrpGanttProps) {
   const [activeJobData, setActiveJobData] = useState<{
     jobId: string
@@ -71,8 +75,10 @@ export function VrpGantt({
     return Array.from(dateSet).sort()
   }, [responseData])
 
-  // Selected date state - default to first available date
-  const [selectedDateIndex, setSelectedDateIndex] = useState(0)
+  // Selected date state - use external control if provided, otherwise internal state
+  const [internalSelectedDateIndex, setInternalSelectedDateIndex] = useState(0)
+  const selectedDateIndex = externalSelectedDateIndex ?? internalSelectedDateIndex
+  const setSelectedDateIndex = onDateChange ?? setInternalSelectedDateIndex
   const selectedDate = availableDates[selectedDateIndex] || null
 
   // Reset selected date index if it exceeds available dates (e.g., after solving new problem)
@@ -80,7 +86,7 @@ export function VrpGantt({
     if (selectedDateIndex >= availableDates.length && availableDates.length > 0) {
       setSelectedDateIndex(0)
     }
-  }, [availableDates.length, selectedDateIndex])
+  }, [availableDates.length, selectedDateIndex, setSelectedDateIndex])
 
   // Filter trips to only include visits on the selected date
   const filteredTrips = useMemo(() => {

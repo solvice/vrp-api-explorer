@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { VrpLayout } from './VrpLayout'
 import { VrpJsonEditor } from './VrpJsonEditor'
@@ -46,6 +46,37 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
 
   // Reordering state
   const [isReordering, setIsReordering] = useState(false)
+
+  // Selected date state for multi-day solutions
+  const [selectedDateIndex, setSelectedDateIndex] = useState(0)
+
+  // Calculate available dates from response data
+  const availableDates = useMemo(() => {
+    if (!vrpResponse.data?.trips?.length) return []
+
+    const dateSet = new Set<string>()
+    vrpResponse.data.trips.forEach(trip => {
+      trip.visits?.forEach(visit => {
+        if (visit.arrival) {
+          const date = new Date(visit.arrival)
+          const dateStr = date.toISOString().split('T')[0]
+          dateSet.add(dateStr)
+        }
+      })
+    })
+
+    return Array.from(dateSet).sort()
+  }, [vrpResponse.data])
+
+  // Derive selectedDate from availableDates and selectedDateIndex
+  const selectedDate = availableDates[selectedDateIndex] ?? null
+
+  // Reset selectedDateIndex when solution changes or dates are no longer valid
+  useEffect(() => {
+    if (selectedDateIndex >= availableDates.length && availableDates.length > 0) {
+      setSelectedDateIndex(0)
+    }
+  }, [availableDates.length, selectedDateIndex, setSelectedDateIndex])
 
   // API status - always configured since keys are server-side
   const apiKeyStatus = {
@@ -350,6 +381,7 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
             responseData={vrpResponse.data}
             highlightedJob={highlightedJob}
             onJobHover={setHighlightedJob}
+            selectedDate={selectedDate}
           />
         }
         kpiBar={
@@ -370,6 +402,8 @@ export function VrpExplorer({ enableAiAssistant = true }: VrpExplorerProps) {
               onJobHover={setHighlightedJob}
               onJobReorder={handleJobReorder}
               isReordering={isReordering}
+              selectedDateIndex={selectedDateIndex}
+              onDateChange={setSelectedDateIndex}
             />
           ) : undefined
         }

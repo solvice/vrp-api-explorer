@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import maplibregl from 'maplibre-gl'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { Loader2, Layers3, ChevronDown } from 'lucide-react'
@@ -20,9 +20,10 @@ interface VrpMapProps {
   className?: string
   highlightedJob?: { resource: string; job: string } | null
   onJobHover?: (job: { resource: string; job: string } | null) => void
+  selectedDate?: string | null
 }
 
-export function VrpMap({ requestData, responseData, className, highlightedJob, onJobHover }: VrpMapProps) {
+export function VrpMap({ requestData, responseData, className, highlightedJob, onJobHover, selectedDate }: VrpMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const markerManager = useRef<MapMarkerManager>(new MapMarkerManager())
@@ -38,6 +39,32 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
       renderMapData()
     }
   })
+
+  // Filter trips by selected date (if multi-day solution)
+  const filteredResponseData = useMemo((): Vrp.OnRouteResponse | null | undefined => {
+    if (!responseData || !selectedDate) return responseData
+
+    if (!responseData.trips) return responseData
+
+    // Filter trips to only include visits on the selected date
+    const filteredTrips = responseData.trips
+      .map(trip => ({
+        ...trip,
+        visits: trip.visits?.filter(visit => {
+          if (!visit.arrival) return false
+          const visitDate = new Date(visit.arrival).toISOString().split('T')[0]
+          return visitDate === selectedDate
+        })
+      }))
+      .filter((trip): trip is NonNullable<typeof trip> =>
+        Boolean(trip.visits && trip.visits.length > 0)
+      )
+
+    return {
+      ...responseData,
+      trips: filteredTrips
+    }
+  }, [responseData, selectedDate])
 
   // Initialize map
   useEffect(() => {
@@ -85,7 +112,8 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
 
     console.log('🗺️ VrpMap: Rendering data', {
       hasRequestData: !!requestData,
-      hasResponseData: !!responseData,
+      hasResponseData: !!filteredResponseData,
+      selectedDate,
       isStyleLoaded: map.current.isStyleLoaded()
     })
 
@@ -93,11 +121,11 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
     markerManager.current.clear()
     routeRenderer.current?.clear()
 
-    if (responseData) {
+    if (filteredResponseData) {
       // Render solution data (routes + numbered markers)
       console.log('🗺️ VrpMap: Rendering solution data')
 
-      const resourceColors = createResourceColorMap(responseData.trips)
+      const resourceColors = createResourceColorMap(filteredResponseData.trips)
       const bounds = new maplibregl.LngLatBounds()
 
       // Add resource markers
@@ -111,7 +139,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
       // Add job markers with sequence numbers
       const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
       markerManager.current.addJobMarkers(
-        responseData.trips,
+        filteredResponseData.trips,
         jobs,
         resourceColors,
         map.current,
@@ -125,7 +153,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
       }
 
       // Render routes
-      routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors)
+      routeRenderer.current?.renderRoutes(filteredResponseData.trips, requestData, resourceColors)
 
     } else {
       // Render request data only (markers without routes)
@@ -151,7 +179,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
         map.current.fitBounds(bounds, { padding: 50 })
       }
     }
-  }, [requestData, responseData, onJobHover])
+  }, [requestData, filteredResponseData, selectedDate, onJobHover])
 
   // Update map when data changes
   useEffect(() => {
@@ -171,7 +199,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
     }
 
     renderMapData()
-  }, [requestData, responseData, renderMapData])
+  }, [requestData, filteredResponseData, renderMapData])
 
   // Handle highlighting when highlightedJob changes
   useEffect(() => {

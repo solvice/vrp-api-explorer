@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import maplibregl from 'maplibre-gl'
 import { Vrp } from 'solvice-vrp-solver/resources/vrp/vrp'
 import { Loader2 } from 'lucide-react'
@@ -14,13 +14,16 @@ interface VrpMapOptimizedProps {
   requestData: Record<string, unknown>
   responseData?: Vrp.OnRouteResponse | null
   className?: string
+  selectedDate?: string | null
+  highlightedJob?: { resource: string; job: string } | null
+  onJobHover?: (job: { resource: string; job: string } | null) => void
 }
 
 /**
  * Optimized map for large datasets (1000+ jobs).
  * Uses GPU-rendered circle layers instead of DOM markers.
  */
-export function VrpMapOptimized({ requestData, responseData, className }: VrpMapOptimizedProps) {
+export function VrpMapOptimized({ requestData, responseData, className, selectedDate }: VrpMapOptimizedProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const routeRenderer = useRef<MapRouteRenderer | null>(null)
@@ -28,10 +31,36 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
 
   const { currentStyle, MAP_STYLES } = useMapStyle({ map: map.current })
 
-  const highlightRoute = useCallback((resourceName: string | null) => {
-    if (!map.current || !responseData?.trips) return
+  // Filter trips by selected date (if multi-day solution)
+  const filteredResponseData = useMemo((): Vrp.OnRouteResponse | null | undefined => {
+    if (!responseData || !selectedDate) return responseData
 
-    responseData.trips.forEach((trip, idx) => {
+    if (!responseData.trips) return responseData
+
+    // Filter trips to only include visits on the selected date
+    const filteredTrips = responseData.trips
+      .map(trip => ({
+        ...trip,
+        visits: trip.visits?.filter(visit => {
+          if (!visit.arrival) return false
+          const visitDate = new Date(visit.arrival).toISOString().split('T')[0]
+          return visitDate === selectedDate
+        })
+      }))
+      .filter((trip): trip is NonNullable<typeof trip> =>
+        Boolean(trip.visits && trip.visits.length > 0)
+      )
+
+    return {
+      ...responseData,
+      trips: filteredTrips
+    }
+  }, [responseData, selectedDate])
+
+  const highlightRoute = useCallback((resourceName: string | null) => {
+    if (!map.current || !filteredResponseData?.trips) return
+
+    filteredResponseData.trips.forEach((trip, idx) => {
       const lineId = `line-${idx}`
       if (!map.current?.getLayer(lineId)) return
 
@@ -46,7 +75,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
         map.current.setPaintProperty(lineId, 'line-width', 1.5)
       }
     })
-  }, [responseData])
+  }, [filteredResponseData])
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return
@@ -75,7 +104,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
   }, [currentStyle, MAP_STYLES])
 
   const renderMapData = useCallback(() => {
-    if (!map.current || !responseData) return
+    if (!map.current || !filteredResponseData) return
 
     routeRenderer.current?.clear()
 
@@ -87,12 +116,12 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
       map.current.removeSource('jobs')
     }
 
-    const resourceColors = createResourceColorMap(responseData.trips)
+    const resourceColors = createResourceColorMap(filteredResponseData.trips)
     const bounds = new maplibregl.LngLatBounds()
     const jobFeatures: GeoJSON.Feature[] = []
     const jobs = requestData.jobs as Array<Record<string, unknown>> | undefined
 
-    responseData.trips?.forEach((trip) => {
+    filteredResponseData.trips?.forEach((trip) => {
       const color = resourceColors.get(trip.resource || '') || '#3B82F6'
 
       trip.visits?.forEach((visit, idx) => {
@@ -119,7 +148,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
     if (jobFeatures.length === 0) return
 
     // Render routes under markers
-    routeRenderer.current?.renderRoutes(responseData.trips, requestData, resourceColors, {
+    routeRenderer.current?.renderRoutes(filteredResponseData.trips, requestData, resourceColors, {
       simplified: true
     })
 
@@ -173,7 +202,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
     if (!bounds.isEmpty()) {
       map.current.fitBounds(bounds, { padding: 50 })
     }
-  }, [requestData, responseData, highlightRoute])
+  }, [requestData, filteredResponseData, highlightRoute])
 
   useEffect(() => {
     if (!map.current) return
@@ -184,7 +213,7 @@ export function VrpMapOptimized({ requestData, responseData, className }: VrpMap
     }
 
     renderMapData()
-  }, [requestData, responseData, renderMapData])
+  }, [requestData, filteredResponseData, renderMapData])
 
   return (
     <div className={cn("relative w-full h-full", className)}>
