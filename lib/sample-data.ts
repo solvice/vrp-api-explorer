@@ -5,7 +5,8 @@ export type SampleType =
   | "lastMile"
   | "fieldService"
   | "homeHealth"
-  | "wasteLogistics";
+  | "wasteLogistics"
+  | "solarMaintenance";
 
 export interface SampleInfo {
   id: SampleType;
@@ -51,6 +52,13 @@ export const SAMPLE_DATASETS: SampleInfo[] = [
     description:
       "60 collection points, 3 trucks - Municipal waste management with capacity and waste type constraints",
     getData: getWasteLogisticsData,
+  },
+  {
+    id: "solarMaintenance",
+    name: "Solar Maintenance",
+    description:
+      "24 solar installations, 8 technicians - Boston area solar maintenance with skills, priorities, and time windows",
+    getData: getSolarMaintenanceData,
   },
 ];
 
@@ -642,6 +650,684 @@ function getWasteLogisticsData(): Vrp.VrpSyncSolveParams {
     weights: {
       travelTimeWeight: 1.0,
       driveTimeWeight: 0.8, // Slight preference for reducing drive time
+    },
+  };
+}
+
+/**
+ * Solar Maintenance: Boston area solar panel maintenance scheduling
+ * Scenario: 24 solar installations with 8 technicians demonstrating skills matching,
+ * priorities, time windows, and home-based routing
+ *
+ * Key Features:
+ * - Skills matching: Commercial jobs require Level 2 certification, battery jobs need specialists
+ * - Priority weighting: High-value contracts ($50K) scheduled before smaller jobs
+ * - Time windows: 14 customer availability windows to respect customer schedules
+ * - Home-based routing: Technicians start from different home locations across Boston metro
+ * - Job types: Residential (1.5-2hrs), Commercial (3-4hrs), Battery systems (2-2.5hrs)
+ */
+function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
+  return {
+    resources: [
+      {
+        name: "Mike-T1-Senior",
+        tags: ["residential", "commercial", "Level2-certified", "battery-install"],
+        shifts: [
+          {
+            from: "2025-11-07T07:00:00Z",
+            to: "2025-11-07T17:00:00Z",
+            start: {
+              latitude: 42.3736,
+              longitude: -71.1097,
+            },
+            end: {
+              latitude: 42.3736,
+              longitude: -71.1097,
+            },
+          },
+        ],
+      },
+      {
+        name: "Sarah-T2-Residential",
+        tags: ["residential"],
+        shifts: [
+          {
+            from: "2025-11-07T08:00:00Z",
+            to: "2025-11-07T16:00:00Z",
+            start: {
+              latitude: 42.3318,
+              longitude: -71.1212,
+            },
+            end: {
+              latitude: 42.3318,
+              longitude: -71.1212,
+            },
+          },
+        ],
+      },
+      {
+        name: "Carlos-T3-Commercial",
+        tags: ["commercial", "Level2-certified"],
+        shifts: [
+          {
+            from: "2025-11-07T07:00:00Z",
+            to: "2025-11-07T17:00:00Z",
+            start: {
+              latitude: 42.3370,
+              longitude: -71.2092,
+            },
+            end: {
+              latitude: 42.3370,
+              longitude: -71.2092,
+            },
+          },
+        ],
+      },
+      {
+        name: "Jennifer-T4-Battery",
+        tags: ["residential", "battery-install"],
+        shifts: [
+          {
+            from: "2025-11-07T08:00:00Z",
+            to: "2025-11-07T17:00:00Z",
+            start: {
+              latitude: 42.2529,
+              longitude: -71.0023,
+            },
+            end: {
+              latitude: 42.2529,
+              longitude: -71.0023,
+            },
+          },
+        ],
+      },
+      {
+        name: "David-T5-Residential",
+        tags: ["residential"],
+        shifts: [
+          {
+            from: "2025-11-07T07:30:00Z",
+            to: "2025-11-07T16:30:00Z",
+            start: {
+              latitude: 42.3765,
+              longitude: -71.2356,
+            },
+            end: {
+              latitude: 42.3765,
+              longitude: -71.2356,
+            },
+          },
+        ],
+      },
+      {
+        name: "Lisa-T6-AllRound",
+        tags: ["residential", "commercial", "Level2-certified"],
+        shifts: [
+          {
+            from: "2025-11-07T07:00:00Z",
+            to: "2025-11-07T17:00:00Z",
+            start: {
+              latitude: 42.3876,
+              longitude: -71.0995,
+            },
+            end: {
+              latitude: 42.3876,
+              longitude: -71.0995,
+            },
+          },
+        ],
+      },
+      {
+        name: "Tom-T7-Residential",
+        tags: ["residential"],
+        shifts: [
+          {
+            from: "2025-11-07T07:00:00Z",
+            to: "2025-11-07T16:00:00Z",
+            start: {
+              latitude: 42.4184,
+              longitude: -71.1062,
+            },
+            end: {
+              latitude: 42.4184,
+              longitude: -71.1062,
+            },
+          },
+        ],
+      },
+      {
+        name: "Rachel-T8-Battery",
+        tags: ["residential", "battery-install"],
+        shifts: [
+          {
+            from: "2025-11-07T08:00:00Z",
+            to: "2025-11-07T17:00:00Z",
+            start: {
+              latitude: 42.3959,
+              longitude: -71.1786,
+            },
+            end: {
+              latitude: 42.3959,
+              longitude: -71.1786,
+            },
+          },
+        ],
+      },
+    ],
+    jobs: [
+      {
+        name: "Commercial-Tech-Campus-Cambridge",
+        location: {
+          latitude: 42.3736,
+          longitude: -71.1097,
+        },
+        duration: 14400, // 4 hours - Commercial job
+        tags: [
+          {
+            name: "commercial",
+            hard: true,
+          },
+          {
+            name: "Level2-certified",
+            hard: true,
+          },
+        ],
+        priority: 3, // High-priority $50K contract
+        windows: [
+          {
+            from: "2025-11-07T07:00:00Z",
+            to: "2025-11-07T10:00:00Z",
+          },
+        ],
+      },
+      {
+        name: "Residence-Martinez-Boston",
+        location: {
+          latitude: 42.3601,
+          longitude: -71.0589,
+        },
+        duration: 7200, // 2 hours - Residential
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+        windows: [
+          {
+            from: "2025-11-07T09:00:00Z",
+            to: "2025-11-07T13:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Tesla-Battery-Newton",
+        location: {
+          latitude: 42.3370,
+          longitude: -71.2092,
+        },
+        duration: 9000, // 2.5 hours - Battery system
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+          {
+            name: "battery-install",
+            hard: true,
+          },
+        ],
+        priority: 2,
+
+      },
+      {
+        name: "Residence-Chen-Brookline",
+        location: {
+          latitude: 42.3318,
+          longitude: -71.1212,
+        },
+        duration: 5400, // 1.5 hours
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+        windows: [
+          {
+            from: "2025-11-07T10:00:00Z",
+            to: "2025-11-07T14:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Commercial-Warehouse-Quincy",
+        location: {
+          latitude: 42.2529,
+          longitude: -71.0023,
+        },
+        duration: 12600, // 3.5 hours - Commercial
+        tags: [
+          {
+            name: "commercial",
+            hard: true,
+          },
+          {
+            name: "Level2-certified",
+            hard: true,
+          },
+        ],
+        priority: 2,
+        windows: [
+          {
+            from: "2025-11-07T07:00:00Z",
+            to: "2025-11-07T11:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Johnson-Somerville",
+        location: {
+          latitude: 42.3876,
+          longitude: -71.0995,
+        },
+        duration: 7200, // 2 hours
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+        windows: [
+          {
+            from: "2025-11-07T08:00:00Z",
+            to: "2025-11-07T12:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Battery-Revere",
+        location: {
+          latitude: 42.4085,
+          longitude: -71.0119,
+        },
+        duration: 7800, // 2.2 hours - Battery
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+          {
+            name: "battery-install",
+            hard: true,
+          },
+        ],
+        priority: 2,
+
+      },
+      {
+        name: "Residence-Smith-Medford",
+        location: {
+          latitude: 42.4184,
+          longitude: -71.1062,
+        },
+        duration: 5400,
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Wong-Malden",
+        location: {
+          latitude: 42.4251,
+          longitude: -71.0662,
+        },
+        duration: 7200,
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+        windows: [
+          {
+            from: "2025-11-07T09:00:00Z",
+            to: "2025-11-07T15:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Garcia-Watertown",
+        location: {
+          latitude: 42.3709,
+          longitude: -71.1828,
+        },
+        duration: 7200,
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+        windows: [
+          {
+            from: "2025-11-07T11:00:00Z",
+            to: "2025-11-07T16:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Commercial-Office-Chelsea",
+        location: {
+          latitude: 42.3918,
+          longitude: -71.0328,
+        },
+        duration: 10800, // 3 hours - Commercial
+        tags: [
+          {
+            name: "commercial",
+            hard: true,
+          },
+          {
+            name: "Level2-certified",
+            hard: true,
+          },
+        ],
+        priority: 2,
+        windows: [
+          {
+            from: "2025-11-07T08:00:00Z",
+            to: "2025-11-07T12:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Patel-Arlington",
+        location: {
+          latitude: 42.4154,
+          longitude: -71.1565,
+        },
+        duration: 5400,
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Battery-Lexington",
+        location: {
+          latitude: 42.4473,
+          longitude: -71.2245,
+        },
+        duration: 9000, // 2.5 hours - Battery
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+          {
+            name: "battery-install",
+            hard: true,
+          },
+        ],
+        priority: 2,
+        windows: [
+          {
+            from: "2025-11-07T08:00:00Z",
+            to: "2025-11-07T13:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Lee-Waltham",
+        location: {
+          latitude: 42.3765,
+          longitude: -71.2356,
+        },
+        duration: 5400,
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Taylor-Belmont",
+        location: {
+          latitude: 42.3959,
+          longitude: -71.1786,
+        },
+        duration: 7200,
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+        windows: [
+          {
+            from: "2025-11-07T10:00:00Z",
+            to: "2025-11-07T15:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Commercial-Retail-Revere",
+        location: {
+          latitude: 42.4085,
+          longitude: -71.0119,
+        },
+        duration: 10800, // 3 hours - Commercial
+        tags: [
+          {
+            name: "commercial",
+            hard: true,
+          },
+          {
+            name: "Level2-certified",
+            hard: true,
+          },
+        ],
+        priority: 1,
+        windows: [
+          {
+            from: "2025-11-07T09:00:00Z",
+            to: "2025-11-07T13:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Anderson-Brookline",
+        location: {
+          latitude: 42.3318,
+          longitude: -71.1212,
+        },
+        duration: 5400,
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Battery-Cambridge",
+        location: {
+          latitude: 42.3736,
+          longitude: -71.1097,
+        },
+        duration: 7800, // 2.2 hours - Battery
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+          {
+            name: "battery-install",
+            hard: true,
+          },
+        ],
+        priority: 1,
+        windows: [
+          {
+            from: "2025-11-07T13:00:00Z",
+            to: "2025-11-07T17:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Rodriguez-Dedham",
+        location: {
+          latitude: 42.2390,
+          longitude: -71.1662,
+        },
+        duration: 7200, // 2 hours
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+        windows: [
+          {
+            from: "2025-11-07T08:00:00Z",
+            to: "2025-11-07T14:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Thomas-Newton",
+        location: {
+          latitude: 42.3370,
+          longitude: -71.2092,
+        },
+        duration: 5400, // 1.5 hours
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+
+      },
+      {
+        name: "Commercial-Manufacturing-Quincy",
+        location: {
+          latitude: 42.2529,
+          longitude: -71.0023,
+        },
+        duration: 12000, // 3.3 hours - Commercial
+        tags: [
+          {
+            name: "commercial",
+            hard: true,
+          },
+          {
+            name: "Level2-certified",
+            hard: true,
+          },
+        ],
+        priority: 2,
+        windows: [
+          {
+            from: "2025-11-07T07:00:00Z",
+            to: "2025-11-07T10:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Wilson-Milton",
+        location: {
+          latitude: 42.2493,
+          longitude: -71.0662,
+        },
+        duration: 7200, // 2 hours
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+        windows: [
+          {
+            from: "2025-11-07T11:00:00Z",
+            to: "2025-11-07T16:00:00Z",
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Brown-Somerville",
+        location: {
+          latitude: 42.3876,
+          longitude: -71.0995,
+        },
+        duration: 5400, // 1.5 hours
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+        ],
+
+      },
+      {
+        name: "Residence-Battery-Needham",
+        location: {
+          latitude: 42.2834,
+          longitude: -71.2331,
+        },
+        duration: 9000, // 2.5 hours - Battery
+        tags: [
+          {
+            name: "residential",
+            hard: true,
+          },
+          {
+            name: "battery-install",
+            hard: true,
+          },
+        ],
+        priority: 2,
+        windows: [
+          {
+            from: "2025-11-07T09:00:00Z",
+            to: "2025-11-07T14:00:00Z",
+          },
+        ],
+
+      },
+    ],
+    options: {
+      partialPlanning: false, // Complete all jobs - cannot leave customers unserviced
+      polylines: true,
+    },
+    weights: {
+      priorityWeight: 10.0, // Strong preference for high-value contracts
+      driveTimeWeight: 1.0, // Minimize drive time
     },
   };
 }
