@@ -6,7 +6,9 @@ import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { ChevronLeft, ChevronRight, AlertCircle, AlertTriangle, CheckCircle2, X } from 'lucide-react'
+import { matchTags, getTagMatchSummary } from '@/lib/tag-matcher'
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, DragOverEvent, pointerWithin } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
 import { SortableItem } from '@/components/ui/sortable-item'
@@ -34,6 +36,7 @@ interface VrpGanttProps {
 }
 
 export function VrpGantt({
+  requestData,
   responseData,
   className,
   highlightedJob,
@@ -192,6 +195,38 @@ export function VrpGantt({
     })
   }
 
+  // Look up job details from request data by name
+  const getJobDetails = useMemo(() => {
+    if (!requestData?.jobs || !Array.isArray(requestData.jobs)) {
+      return new Map()
+    }
+    return new Map(
+      (requestData.jobs as Array<{
+        name: string
+        windows?: Array<{ from: string; to: string }>
+        tags?: Array<{ name: string; hard?: boolean; weight?: number }>
+        priority?: number | null
+        urgency?: number | null
+        load?: Array<number> | null
+        complexity?: number | null
+        duration?: number | null
+      }>).map(job => [job.name, job])
+    )
+  }, [requestData])
+
+  // Look up resource details from request data by name
+  const getResourceDetails = useMemo(() => {
+    if (!requestData?.resources || !Array.isArray(requestData.resources)) {
+      return new Map()
+    }
+    return new Map(
+      (requestData.resources as Array<{
+        name: string
+        tags?: string[]
+      }>).map(resource => [resource.name, resource])
+    )
+  }, [requestData])
+
   // Navigation handlers
   const goToPreviousDate = () => {
     if (selectedDateIndex > 0) {
@@ -334,7 +369,7 @@ export function VrpGantt({
             <div className="sticky top-0 z-10 bg-background border-b">
               <div className="flex h-10">
                 <div className="w-32 flex-shrink-0 border-r flex items-center px-2 text-xs font-medium text-muted-foreground bg-muted/50">
-                  Vehicle
+                  Resource
                 </div>
                 <div className="flex-1 relative bg-muted/30">
                   {timelineData.hours.map((hour, idx) => (
@@ -355,7 +390,7 @@ export function VrpGantt({
               </div>
             </div>
 
-            {/* Vehicle rows */}
+            {/* Resource rows */}
             <div className="divide-y divide-border">
               {filteredTrips.map((trip, tripIdx) => {
                 const resourceName = trip.resource || 'Unknown'
@@ -375,7 +410,7 @@ export function VrpGantt({
                     <div
                       className="flex hover:bg-muted/30 transition-colors"
                     >
-                    {/* Vehicle label */}
+                    {/* Resource label */}
                     <div className="w-32 flex-shrink-0 border-r p-2 flex items-center gap-2">
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0"
@@ -427,6 +462,13 @@ export function VrpGantt({
 
                         const isDimmed = highlightedJob && !isHighlighted
 
+                        // Calculate tag matching
+                        const jobDetails = getJobDetails.get(jobName)
+                        const resourceDetails = getResourceDetails.get(resourceName)
+                        const tagMatchResult = matchTags(jobDetails?.tags, resourceDetails?.tags)
+                        const hasTagViolation = tagMatchResult.hasRequirements &&
+                          (!tagMatchResult.allHardMatched || !tagMatchResult.allSoftMatched)
+
                         return (
                           <SortableItem
                             key={sortableId}
@@ -442,7 +484,7 @@ export function VrpGantt({
                               <TooltipTrigger asChild>
                                 <div
                                   className={cn(
-                                    "absolute top-1 h-8 rounded px-2 flex items-center text-white text-[10px] font-medium transition-all shadow-sm",
+                                    "absolute top-1 h-8 rounded px-2 flex items-center text-white text-[10px] font-medium transition-all shadow-sm min-w-8",
                                     isHighlighted && "ring-2 ring-white scale-110 z-10",
                                     isDimmed && "opacity-40",
                                     !highlightedJob && !isReordering && "hover:brightness-110",
@@ -451,8 +493,7 @@ export function VrpGantt({
                                   style={{
                                     left: `${left}%`,
                                     width: `${Math.max(width, 1)}%`,
-                                    backgroundColor: color,
-                                    minWidth: '32px'
+                                    backgroundColor: color
                                   }}
                                   onMouseEnter={() => !isReordering && onJobHover?.({ resource: resourceName, job: jobName })}
                                   onMouseLeave={() => onJobHover?.(null)}
@@ -461,24 +502,181 @@ export function VrpGantt({
                                   data-index={visitIdx}
                               >
                                 <span className="truncate">{jobName}</span>
+                                {hasTagViolation && (
+                                  <div className="absolute -top-1.5 -right-1.5">
+                                    <Badge
+                                      variant={!tagMatchResult.allHardMatched ? "destructive" : "default"}
+                                      className="h-4 w-4 p-0 flex items-center justify-center rounded-full"
+                                      aria-label={getTagMatchSummary(tagMatchResult)}
+                                    >
+                                      {!tagMatchResult.allHardMatched ? (
+                                        <AlertCircle className="h-3 w-3" aria-hidden="true" />
+                                      ) : (
+                                        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                                      )}
+                                    </Badge>
+                                  </div>
+                                )}
                               </div>
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-xs">
-                              <div className="space-y-1">
-                                <p className="font-medium">{jobName}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Arrival: {formatTime(new Date(visit.arrival))}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Departure: {formatTime(new Date(departure))}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Duration: {durationMinutes} min
-                                </p>
-                                {visit.serviceTime && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Service time: {Math.round(visit.serviceTime / 60)} min
+                              <div className="space-y-2">
+                                {/* Job Name Header */}
+                                <p className="font-medium text-sm">{jobName}</p>
+
+                                {/* Job Details (priority, urgency, load, complexity) */}
+                                {(() => {
+                                  const jobDetails = getJobDetails.get(jobName)
+                                  const hasPriority = jobDetails?.priority != null
+                                  const hasUrgency = jobDetails?.urgency != null
+                                  const hasLoad = jobDetails?.load && jobDetails.load.length > 0
+                                  const hasComplexity = jobDetails?.complexity != null
+
+                                  if (!hasPriority && !hasUrgency && !hasLoad && !hasComplexity) {
+                                    return null
+                                  }
+
+                                  return (
+                                    <div className="space-y-0.5 pt-1 border-t border-primary-foreground/20">
+                                      {(hasPriority || hasUrgency) && (
+                                        <div className="flex gap-3">
+                                          {hasPriority && (
+                                            <p className="text-xs text-primary-foreground/90">
+                                              Priority: <span className="font-medium">{jobDetails.priority}</span>
+                                            </p>
+                                          )}
+                                          {hasUrgency && (
+                                            <p className="text-xs text-primary-foreground/90">
+                                              Urgency: <span className="font-medium">{jobDetails.urgency}</span>
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+                                      {hasLoad && (
+                                        <p className="text-xs text-primary-foreground/90">
+                                          Load: <span className="font-medium">[{jobDetails.load?.join(', ')}]</span>
+                                        </p>
+                                      )}
+                                      {hasComplexity && (
+                                        <p className="text-xs text-primary-foreground/90">
+                                          Complexity: <span className="font-medium">{jobDetails.complexity}</span>
+                                        </p>
+                                      )}
+                                    </div>
+                                  )
+                                })()}
+
+                                {/* Timing Information */}
+                                <div className="space-y-0.5 pt-1 border-t border-primary-foreground/20">
+                                  <p className="text-xs text-primary-foreground/90">
+                                    Arrival: {formatTime(new Date(visit.arrival))}
                                   </p>
+                                  <p className="text-xs text-primary-foreground/90">
+                                    Departure: {formatTime(new Date(departure))}
+                                  </p>
+                                  <p className="text-xs text-primary-foreground/90">
+                                    Duration: {durationMinutes} min
+                                  </p>
+                                  {visit.serviceTime && (
+                                    <p className="text-xs text-primary-foreground/90">
+                                      Service time: {Math.round(visit.serviceTime / 60)} min
+                                    </p>
+                                  )}
+                                </div>
+
+                                {/* Time Windows (if available) */}
+                                {(() => {
+                                  const jobDetails = getJobDetails.get(jobName)
+                                  if (jobDetails?.windows && jobDetails.windows.length > 0) {
+                                    return (
+                                      <div className="space-y-0.5 pt-1 border-t border-primary-foreground/20">
+                                        <p className="text-xs font-medium text-primary-foreground/90">
+                                          Time Window{jobDetails.windows.length > 1 ? 's' : ''}:
+                                        </p>
+                                        {jobDetails.windows.map((timeWindow: { from: string; to: string }, idx: number) => (
+                                          <p key={idx} className="text-xs text-primary-foreground/80 pl-2">
+                                            {formatTime(new Date(timeWindow.from))} - {formatTime(new Date(timeWindow.to))}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )
+                                  }
+                                  return null
+                                })()}
+
+                                {/* Tag Matching Section (if job has tag requirements) */}
+                                {tagMatchResult.hasRequirements && (
+                                  <div className="space-y-1 pt-1 border-t border-primary-foreground/20" role="status">
+                                    {/* Match Quality Header */}
+                                    <div className="flex items-center gap-1.5">
+                                      {tagMatchResult.allHardMatched && tagMatchResult.allSoftMatched ? (
+                                        <CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400" />
+                                      ) : !tagMatchResult.allHardMatched ? (
+                                        <AlertCircle className="h-3 w-3 text-destructive" />
+                                      ) : (
+                                        <AlertTriangle className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                      )}
+                                      <p className="text-xs font-medium text-primary-foreground/90">
+                                        Tag Matching: {getTagMatchSummary(tagMatchResult)}
+                                      </p>
+                                    </div>
+
+                                    {/* Required Tags */}
+                                    {jobDetails?.tags && jobDetails.tags.length > 0 && (
+                                      <div>
+                                        <p className="text-[10px] font-medium text-primary-foreground/70 mb-0.5">
+                                          Required:
+                                        </p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {jobDetails.tags.map((tag: { name: string; hard?: boolean; weight?: number }, idx: number) => {
+                                            const isMatched = tagMatchResult.matchedTags.includes(tag.name)
+                                            const isMissing = tag.hard !== false
+                                              ? tagMatchResult.missingHardTags.includes(tag.name)
+                                              : tagMatchResult.missingSoftTags.includes(tag.name)
+
+                                            return (
+                                              <span
+                                                key={idx}
+                                                className={cn(
+                                                  "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
+                                                  isMatched && "bg-green-500/10 text-green-700 dark:text-green-300 ring-1 ring-green-500/20",
+                                                  isMissing && tag.hard !== false && "bg-destructive/10 text-destructive dark:text-red-300 ring-1 ring-destructive/20",
+                                                  isMissing && tag.hard === false && "bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/20"
+                                                )}
+                                              >
+                                                {isMatched ? (
+                                                  <CheckCircle2 className="h-2.5 w-2.5" />
+                                                ) : (
+                                                  <X className="h-2.5 w-2.5" />
+                                                )}
+                                                {tag.name}
+                                                {tag.hard !== false && <span className="ml-0.5" aria-label="Required">*</span>}
+                                              </span>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Resource Tags */}
+                                    {resourceDetails?.tags && resourceDetails.tags.length > 0 && (
+                                      <div>
+                                        <p className="text-[10px] font-medium text-primary-foreground/70 mb-0.5">
+                                          Resource ({resourceName}):
+                                        </p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {resourceDetails.tags.map((tag: string, idx: number) => (
+                                            <span
+                                              key={idx}
+                                              className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-primary-foreground/10 text-primary-foreground/80"
+                                            >
+                                              {tag}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </TooltipContent>

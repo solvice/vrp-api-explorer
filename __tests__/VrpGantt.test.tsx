@@ -88,7 +88,7 @@ describe('VrpGantt', () => {
       />
     )
 
-    expect(screen.getByText('Vehicle')).toBeInTheDocument()
+    expect(screen.getByText('Resource')).toBeInTheDocument()
   })
 
   it('handles empty trips array', () => {
@@ -178,5 +178,242 @@ describe('VrpGantt', () => {
 
     expect(screen.getByText('Vehicle 1')).toBeInTheDocument()
     expect(screen.getByText('Vehicle 2')).toBeInTheDocument()
+  })
+
+  describe('Tag Matching', () => {
+    it('shows perfect match when all tags are matched', () => {
+      const requestWithTags = {
+        jobs: [
+          {
+            name: 'Job 1',
+            location: { longitude: 3.7, latitude: 51.0 },
+            tags: [
+              { name: 'electrical', hard: true },
+              { name: 'certified', hard: true }
+            ]
+          }
+        ],
+        resources: [
+          {
+            name: 'Technician 1',
+            tags: ['electrical', 'certified', 'plumbing']
+          }
+        ]
+      }
+
+      const responseWithTags: Vrp.OnRouteResponse = {
+        trips: [
+          {
+            resource: 'Technician 1',
+            visits: [
+              {
+                job: 'Job 1',
+                arrival: '2024-01-01T08:00:00Z',
+                serviceTime: 1800
+              }
+            ]
+          }
+        ]
+      }
+
+      render(
+        <VrpGantt
+          requestData={requestWithTags}
+          responseData={responseWithTags}
+        />
+      )
+
+      // Should not show a badge indicator for perfect match
+      const badges = screen.queryAllByRole('status')
+      const violationBadges = badges.filter(badge =>
+        badge.getAttribute('aria-label')?.includes('violation')
+      )
+      expect(violationBadges).toHaveLength(0)
+    })
+
+    it('shows soft constraint violation badge when soft tag is missing', () => {
+      const requestWithSoftTag = {
+        jobs: [
+          {
+            name: 'Job 1',
+            location: { longitude: 3.7, latitude: 51.0 },
+            tags: [
+              { name: 'electrical', hard: true },
+              { name: 'senior', hard: false } // Soft constraint
+            ]
+          }
+        ],
+        resources: [
+          {
+            name: 'Technician 1',
+            tags: ['electrical'] // Missing 'senior' soft tag
+          }
+        ]
+      }
+
+      const responseWithSoftViolation: Vrp.OnRouteResponse = {
+        trips: [
+          {
+            resource: 'Technician 1',
+            visits: [
+              {
+                job: 'Job 1',
+                arrival: '2024-01-01T08:00:00Z',
+                serviceTime: 1800
+              }
+            ]
+          }
+        ]
+      }
+
+      render(
+        <VrpGantt
+          requestData={requestWithSoftTag}
+          responseData={responseWithSoftViolation}
+        />
+      )
+
+      // Should show a badge with soft violation indicator
+      const violationBadge = screen.getByLabelText('Soft constraint violation')
+      expect(violationBadge).toBeInTheDocument()
+    })
+
+    it('shows hard constraint violation badge when hard tag is missing', () => {
+      const requestWithHardTag = {
+        jobs: [
+          {
+            name: 'Job 1',
+            location: { longitude: 3.7, latitude: 51.0 },
+            tags: [
+              { name: 'electrical', hard: true },
+              { name: 'certified', hard: true }
+            ]
+          }
+        ],
+        resources: [
+          {
+            name: 'Technician 1',
+            tags: ['electrical'] // Missing 'certified' hard tag
+          }
+        ]
+      }
+
+      const responseWithHardViolation: Vrp.OnRouteResponse = {
+        trips: [
+          {
+            resource: 'Technician 1',
+            visits: [
+              {
+                job: 'Job 1',
+                arrival: '2024-01-01T08:00:00Z',
+                serviceTime: 1800
+              }
+            ]
+          }
+        ]
+      }
+
+      render(
+        <VrpGantt
+          requestData={requestWithHardTag}
+          responseData={responseWithHardViolation}
+        />
+      )
+
+      // Should show a badge with hard violation indicator
+      const violationBadge = screen.getByLabelText('Hard constraint violation')
+      expect(violationBadge).toBeInTheDocument()
+    })
+
+    it('handles jobs without tag requirements', () => {
+      const requestWithoutTags = {
+        jobs: [
+          {
+            name: 'Job 1',
+            location: { longitude: 3.7, latitude: 51.0 }
+            // No tags
+          }
+        ],
+        resources: [
+          {
+            name: 'Technician 1',
+            tags: ['electrical', 'certified']
+          }
+        ]
+      }
+
+      const responseWithoutTags: Vrp.OnRouteResponse = {
+        trips: [
+          {
+            resource: 'Technician 1',
+            visits: [
+              {
+                job: 'Job 1',
+                arrival: '2024-01-01T08:00:00Z',
+                serviceTime: 1800
+              }
+            ]
+          }
+        ]
+      }
+
+      render(
+        <VrpGantt
+          requestData={requestWithoutTags}
+          responseData={responseWithoutTags}
+        />
+      )
+
+      // Should not show any violation badges
+      const badges = screen.queryAllByRole('status')
+      const violationBadges = badges.filter(badge =>
+        badge.getAttribute('aria-label')?.includes('violation')
+      )
+      expect(violationBadges).toHaveLength(0)
+    })
+
+    it('handles resources without tags', () => {
+      const requestResourceNoTags = {
+        jobs: [
+          {
+            name: 'Job 1',
+            location: { longitude: 3.7, latitude: 51.0 },
+            tags: [{ name: 'electrical', hard: true }]
+          }
+        ],
+        resources: [
+          {
+            name: 'Technician 1'
+            // No tags
+          }
+        ]
+      }
+
+      const responseResourceNoTags: Vrp.OnRouteResponse = {
+        trips: [
+          {
+            resource: 'Technician 1',
+            visits: [
+              {
+                job: 'Job 1',
+                arrival: '2024-01-01T08:00:00Z',
+                serviceTime: 1800
+              }
+            ]
+          }
+        ]
+      }
+
+      render(
+        <VrpGantt
+          requestData={requestResourceNoTags}
+          responseData={responseResourceNoTags}
+        />
+      )
+
+      // Should show hard violation badge since resource has no tags
+      const violationBadge = screen.getByLabelText('Hard constraint violation')
+      expect(violationBadge).toBeInTheDocument()
+    })
   })
 })

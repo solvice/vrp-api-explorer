@@ -40,6 +40,44 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
     }
   })
 
+  // Calculate initial map center from request data (only on mount)
+  const initialMapCenter = useMemo(() => {
+    const DEFAULT_ZOOM_WITH_DATA = 11
+    const DEFAULT_ZOOM_NO_DATA = 2
+    let center: [number, number] = [0, 0]
+    let zoom = DEFAULT_ZOOM_NO_DATA
+
+    if (!requestData) return { center, zoom }
+
+    // Try to get center from jobs or resources
+    const jobs = Array.isArray(requestData.jobs) ? requestData.jobs : undefined
+    const resources = Array.isArray(requestData.resources) ? requestData.resources : undefined
+
+    if (jobs && jobs.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const firstJob = jobs[0] as any
+      if (typeof firstJob?.longitude === 'number' && typeof firstJob?.latitude === 'number') {
+        center = [firstJob.longitude, firstJob.latitude]
+        zoom = DEFAULT_ZOOM_WITH_DATA
+      }
+    } else if (resources && resources.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const firstResource = resources[0] as any
+      const start = firstResource?.shifts?.[0]?.start
+      if (start && typeof start.longitude === 'number' && typeof start.latitude === 'number') {
+        center = [start.longitude, start.latitude]
+        zoom = DEFAULT_ZOOM_WITH_DATA
+      }
+    }
+
+    if (center[0] === 0 && center[1] === 0) {
+      console.warn('VrpMap: No location data found in request, using default center [0,0]')
+    }
+
+    return { center, zoom }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Empty deps - only calculate on mount
+
   // Filter trips by selected date (if multi-day solution)
   const filteredResponseData = useMemo((): Vrp.OnRouteResponse | null | undefined => {
     if (!responseData || !selectedDate) return responseData
@@ -75,8 +113,8 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: selectedStyle.url,
-      center: [3.7250, 51.0538], // Ghent center
-      zoom: 11
+      center: initialMapCenter.center,
+      zoom: initialMapCenter.zoom
     })
 
     // Initialize route renderer
@@ -101,7 +139,7 @@ export function VrpMap({ requestData, responseData, className, highlightedJob, o
         map.current = null
       }
     }
-  }, [currentStyle, MAP_STYLES])
+  }, [currentStyle, MAP_STYLES, initialMapCenter])
 
   // Render map data (markers and routes)
   const renderMapData = useCallback(() => {
