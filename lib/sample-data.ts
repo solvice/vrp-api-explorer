@@ -833,6 +833,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
           },
         ],
         priority: 3, // High-priority $50K contract
+        urgency: 5, // Critical - must be done early
         windows: [
           {
             from: "2025-11-07T07:00:00Z",
@@ -853,6 +854,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
             hard: true,
           },
         ],
+        urgency: 3, // Moderate - customer has limited availability
         windows: [
           {
             from: "2025-11-07T09:00:00Z",
@@ -879,6 +881,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
           },
         ],
         priority: 2,
+        urgency: 4, // High urgency - new installation
 
       },
       {
@@ -920,6 +923,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
           },
         ],
         priority: 2,
+        urgency: 4, // Production facility - needs early service
         windows: [
           {
             from: "2025-11-07T07:00:00Z",
@@ -967,6 +971,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
           },
         ],
         priority: 2,
+        urgency: 3, // Battery backup needed soon
 
       },
       {
@@ -1044,6 +1049,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
           },
         ],
         priority: 2,
+        urgency: 3, // Office building - minimize business disruption
         windows: [
           {
             from: "2025-11-07T08:00:00Z",
@@ -1085,6 +1091,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
           },
         ],
         priority: 2,
+        urgency: 4, // Critical - power outage concerns
         windows: [
           {
             from: "2025-11-07T08:00:00Z",
@@ -1188,6 +1195,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
           },
         ],
         priority: 1,
+        urgency: 2, // Afternoon window - less urgent
         windows: [
           {
             from: "2025-11-07T13:00:00Z",
@@ -1250,6 +1258,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
           },
         ],
         priority: 2,
+        urgency: 5, // Critical - manufacturing downtime costs
         windows: [
           {
             from: "2025-11-07T07:00:00Z",
@@ -1312,6 +1321,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
           },
         ],
         priority: 2,
+        urgency: 3, // System upgrade needed soon
         windows: [
           {
             from: "2025-11-07T09:00:00Z",
@@ -1327,6 +1337,7 @@ function getSolarMaintenanceData(): Vrp.VrpSyncSolveParams {
     },
     weights: {
       priorityWeight: 10.0, // Strong preference for high-value contracts
+      urgencyWeight: 5.0, // Schedule urgent jobs earlier in the day
       driveTimeWeight: 1.0, // Minimize drive time
     },
   };
